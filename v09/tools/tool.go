@@ -274,7 +274,10 @@ func A2UICatalogTool() (tool.Tool, error) {
 		a2uiCapabilities, ok := kit.CapabilitiesFromContext(ctx)
 		if !ok {
 			// No negotiated A2UI params on this turn; empty output is valid.
-			return &A2UICatalogToolOutput{}, nil
+			return &A2UICatalogToolOutput{
+				CatalogURLs:    []string{},
+				InlineCatalogs: []string{},
+			}, nil
 		}
 
 		catalogURLs, catalogsMap, err := kit.GetCatalogs(a2uiCapabilities)
@@ -282,13 +285,17 @@ func A2UICatalogTool() (tool.Tool, error) {
 			return nil, err
 		}
 
-		var stringifiedCatalogs []string
+		stringifiedCatalogs := make([]string, 0, len(catalogsMap))
 		for _, catalog := range catalogsMap {
 			jsonBytes, err := json.Marshal(catalog)
 			if err != nil {
 				return nil, err
 			}
 			stringifiedCatalogs = append(stringifiedCatalogs, string(jsonBytes))
+		}
+
+		if catalogURLs == nil {
+			catalogURLs = []string{}
 		}
 
 		return &A2UICatalogToolOutput{

@@ -14,8 +14,11 @@ import "encoding/json"
 // returned only if JSON remarshal of an inline catalog fails.
 func GetCatalogs(capabilities map[string]any) ([]string, []map[string]any, error) {
 	var supportedCatalogIds []string
-	if supportedCatalogs, ok := capabilities["supportedCatalogIds"].([]any); ok {
-		for _, catalogIDAny := range supportedCatalogs {
+	switch v := capabilities["supportedCatalogIds"].(type) {
+	case []string:
+		supportedCatalogIds = v
+	case []any:
+		for _, catalogIDAny := range v {
 			if catalogID, ok := catalogIDAny.(string); ok {
 				supportedCatalogIds = append(supportedCatalogIds, catalogID)
 			}
