@@ -6,7 +6,6 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
-	"reflect"
 	"strings"
 	"testing"
 
@@ -147,24 +146,6 @@ func TestInlineAndRegisteredCatalogsAreUsed(t *testing.T) {
 	registered := kit.ValidateOptions{Version: kit.V09, Resolver: reg, Strict: true}
 	if err := Validate(context.Background(), msgs(bad), registered); err == nil {
 		t.Error("registered catalog should enforce Badge.label")
-	}
-}
-
-func TestFinalizeDedupesAndSorts(t *testing.T) {
-	in := []schema.Problem{
-		{Path: "messages[2]", Message: "b"},
-		{Path: "messages[0]", Message: "a"},
-		{Path: "messages[2]", Message: "b"},
-		{Path: "messages[0]", Message: "z"},
-	}
-	want := []schema.Problem{
-		{Path: "messages[0]", Message: "a"},
-		{Path: "messages[0]", Message: "z"},
-		{Path: "messages[2]", Message: "b"},
-	}
-	got := finalize(in)
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("finalize(%v) = %v, want %v", in, got, want)
 	}
 }
 

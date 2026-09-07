@@ -3,7 +3,6 @@ package v09
 import (
 	"context"
 	"fmt"
-	"sort"
 
 	"go.alis.build/adk/a2ui/internal/schema"
 	"go.alis.build/adk/a2ui/kit"
@@ -34,7 +33,7 @@ func Validate(ctx context.Context, messages []map[string]any, opts kit.ValidateO
 	if err := envelope.Validate(inst); err != nil {
 		// Structure is broken; component-level checks would only add noise.
 		problems = append(problems, schema.Format(err, inst, "messages")...)
-		return &schema.ValidationError{Problems: finalize(problems)}
+		return &schema.ValidationError{Problems: schema.Finalize(problems)}
 	}
 
 	catalogProblems, err := validateAgainstCatalogs(ctx, eng, messages, opts, v091)
@@ -43,30 +42,11 @@ func Validate(ctx context.Context, messages []map[string]any, opts kit.ValidateO
 	}
 	problems = append(problems, catalogProblems...)
 	problems = append(problems, semanticRules(messages)...)
-	problems = finalize(problems)
+	problems = schema.Finalize(problems)
 	if len(problems) == 0 {
 		return nil
 	}
 	return &schema.ValidationError{Problems: problems}
-}
-
-// finalize drops problems whose (Path, Message) pair already appeared, keeping the first
-// occurrence, and sorts the result stably by Path. checkVersion and the schema formatter can
-// both report the same wrong-version finding for one message (e.g.
-// messages[0].version: must be "v0.9"), and every return path must apply this the same way so
-// the returned error is deterministic regardless of which pass produced the problems.
-func finalize(problems []schema.Problem) []schema.Problem {
-	seen := make(map[schema.Problem]bool, len(problems))
-	out := problems[:0:0]
-	for _, p := range problems {
-		if seen[p] {
-			continue
-		}
-		seen[p] = true
-		out = append(out, p)
-	}
-	sort.SliceStable(out, func(i, j int) bool { return out[i].Path < out[j].Path })
-	return out
 }
 
 func checkVersion(messages []map[string]any, want string) []schema.Problem {

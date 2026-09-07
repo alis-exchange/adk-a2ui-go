@@ -134,3 +134,28 @@ func TestCallRendererFunctionValidated(t *testing.T) {
 		t.Errorf("unknown function should be reported at the call path, got %v", err)
 	}
 }
+
+func TestStrictReportsMissingCatalogOnce(t *testing.T) {
+	msgs := []map[string]any{
+		{"version": "v1.0", "createSurface": map[string]any{"surfaceId": "s", "catalogId": "https://example.com/nope.json"}},
+		{"version": "v1.0", "updateComponents": map[string]any{"surfaceId": "s", "components": []any{
+			map[string]any{"id": "root", "component": "Text", "text": "hi"},
+			map[string]any{"id": "b", "component": "Text", "text": "bye", "catalogId": "https://example.com/nope.json"},
+		}}},
+	}
+	err := Validate(context.Background(), msgs, kit.ValidateOptions{Version: kit.V10, Strict: true})
+	var ve *schema.ValidationError
+	if !errors.As(err, &ve) {
+		t.Fatalf("want *schema.ValidationError, got %v", err)
+	}
+	if len(ve.Problems) != 1 {
+		t.Fatalf("want exactly one problem (missing catalog reported once), got %d: %v", len(ve.Problems), ve.Problems)
+	}
+	p := ve.Problems[0]
+	if !strings.Contains(p.Message, "not available") {
+		t.Errorf("message = %q, want it to contain %q", p.Message, "not available")
+	}
+	if p.Path != "messages[0].createSurface.catalogId" {
+		t.Errorf("path = %q, want %q", p.Path, "messages[0].createSurface.catalogId")
+	}
+}

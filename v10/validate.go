@@ -3,7 +3,6 @@ package v10
 import (
 	"context"
 	"fmt"
-	"sort"
 
 	"go.alis.build/adk/a2ui/internal/schema"
 	"go.alis.build/adk/a2ui/kit"
@@ -46,7 +45,7 @@ func Validate(ctx context.Context, messages []map[string]any, opts kit.ValidateO
 	if err := envelope.Validate(inst); err != nil {
 		// Structure is broken; component-level checks would only add noise.
 		problems = append(problems, schema.Format(err, inst, "messages")...)
-		return &schema.ValidationError{Problems: finalize(problems)}
+		return &schema.ValidationError{Problems: schema.Finalize(problems)}
 	}
 	catalogProblems, err := validateAgainstCatalogs(ctx, eng, messages, opts)
 	if err != nil {
@@ -54,30 +53,11 @@ func Validate(ctx context.Context, messages []map[string]any, opts kit.ValidateO
 	}
 	problems = append(problems, catalogProblems...)
 	problems = append(problems, semanticRules(messages)...)
-	problems = finalize(problems)
+	problems = schema.Finalize(problems)
 	if len(problems) == 0 {
 		return nil
 	}
 	return &schema.ValidationError{Problems: problems}
-}
-
-// finalize drops problems whose (Path, Message) pair already appeared, keeping the first
-// occurrence, and sorts the result stably by Path. The version check and the schema formatter
-// can both report the same wrong-version finding for one message (e.g.
-// messages[0].version: must be "v1.0"), and every return path must apply this the same way so
-// the returned error is deterministic regardless of which pass produced the problems.
-func finalize(problems []schema.Problem) []schema.Problem {
-	seen := make(map[schema.Problem]bool, len(problems))
-	out := problems[:0:0]
-	for _, p := range problems {
-		if seen[p] {
-			continue
-		}
-		seen[p] = true
-		out = append(out, p)
-	}
-	sort.SliceStable(out, func(i, j int) bool { return out[i].Path < out[j].Path })
-	return out
 }
 
 // surfaceInfo records what this batch's createSurface said about a surface.
@@ -102,10 +82,10 @@ func createdSurfaces(messages []map[string]any) map[string]surfaceInfo {
 
 // catalogFor applies the v1.0 fallback: the component's own catalogId, else the surface's.
 // cid is "" when neither is known for this batch. lookupPath is where a strict-mode "catalog
-// not available" finding belongs: the component's own catalogId property when the component set
-// one, or the creating surface's createSurface.catalogId when the id was inherited (so every
-// component that silently inherits the same missing catalog from one surface collapses, via
-// finalize, into a single finding attached to that surface instead of one per component).
+// not available" finding belongs if this turns out to be the first place this cid is
+// encountered in message order: the component's own catalogId property when the component set
+// one, or the creating surface's createSurface.catalogId when the id was inherited. lookup
+// reports at most once per cid regardless of how many places later reuse it.
 func catalogFor(comp map[string]any, componentPath string, surface surfaceInfo, created bool) (cid, lookupPath string) {
 	if own, _ := comp["catalogId"].(string); own != "" {
 		return own, componentPath + ".catalogId"
@@ -121,20 +101,15 @@ func validateAgainstCatalogs(ctx context.Context, eng *schema.Engine, messages [
 	surfaces := createdSurfaces(messages)
 	resolved := map[string]map[string]any{}
 	missing := map[string]bool{}
-	// lookup resolves cid, caching both hits and misses. Unlike the cache, problem reporting is
-	// not gated to "first attempt only": every call site that fails to resolve cid appends its
-	// own (possibly repeated) finding at its own path, and finalize's (Path, Message) dedup is
-	// what collapses repeats that share a path (e.g. several components inheriting the same
-	// missing catalog from one surface) down to one, while still keeping distinct paths (e.g.
-	// several components that each set that same missing catalogId themselves) separate.
+	// lookup resolves cid, caching both hits and misses. A strict-mode "not available" finding is
+	// reported at most once per cid per batch, attributed to the first place it is encountered in
+	// message order (the path passed in on that first miss); every later call site that reuses
+	// the same still-missing cid is silently skipped, regardless of what path it would have used.
 	lookup := func(cid, path string) (map[string]any, bool, error) {
 		if c, ok := resolved[cid]; ok {
 			return c, true, nil
 		}
 		if missing[cid] {
-			if opts.Strict {
-				problems = append(problems, schema.Problem{Path: path, Message: fmt.Sprintf("catalog %q is not available to this agent (not inline, registered, or built in)", cid)})
-			}
 			return nil, false, nil
 		}
 		c, ok, err := schema.ResolveCatalog(ctx, spec.MajorV10, cid, opts)
