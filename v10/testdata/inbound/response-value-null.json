@@ -1,0 +1,3 @@
+{"name":"response with null value","version":"v1.0",
+ "message":{"version":"v1.0","rendererFunctionResponse":{"functionCallId":"fc-1","value":null}},
+ "wantString":""}

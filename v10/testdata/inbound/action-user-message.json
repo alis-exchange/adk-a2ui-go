@@ -1,0 +1,3 @@
+{"name":"action with userMessage and extensions","version":"v1.0",
+ "message":{"version":"v1.0","action":{"name":"order","userMessage":"Placed the order","surfaceId":"s1","sourceComponentId":"btn","timestamp":"2026-09-07T10:00:00Z","context":{},"metadata":{"extensions":{"vendor_trace":"abc"}}}},
+ "wantString":"user action \"order\" on surface \"s1\" from component \"btn\" with no context (user said: \"Placed the order\")"}

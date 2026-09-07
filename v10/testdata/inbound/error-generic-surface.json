@@ -1,0 +1,3 @@
+{"name":"generic error on a surface","version":"v1.0",
+ "message":{"version":"v1.0","error":{"code":"RENDER_FAILED","surfaceId":"s1","message":"boom","detail":{"line":3}}},
+ "wantString":"renderer error RENDER_FAILED on surface \"s1\": boom"}

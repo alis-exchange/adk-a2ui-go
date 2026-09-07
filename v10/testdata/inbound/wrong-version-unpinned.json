@@ -1,0 +1,3 @@
+{"name":"wrong version unpinned","version":"",
+ "message":{"version":"v0.9","error":{"code":"X","surfaceId":"s","message":"m"}},
+ "wantPaths":["version"],"wantContains":["must be \"v1.0\""]}

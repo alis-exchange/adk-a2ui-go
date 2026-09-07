@@ -1,0 +1,3 @@
+{"name":"wrong version","version":"v1.0",
+ "message":{"version":"v0.9","error":{"code":"X","surfaceId":"s","message":"m"}},
+ "wantPaths":["version"],"wantContains":["must be \"v1.0\""]}

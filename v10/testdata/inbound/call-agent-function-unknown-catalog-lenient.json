@@ -1,0 +1,3 @@
+{"name":"unresolvable catalog without strict","version":"v1.0",
+ "message":{"version":"v1.0","callAgentFunction":{"surfaceId":"s1","functionCallId":"fc-1","callFunction":{"call":"verifyProvider","catalogId":"https://example.com/nope.json","args":{"providerId":"PRV-102"}}}},
+ "wantString":""}

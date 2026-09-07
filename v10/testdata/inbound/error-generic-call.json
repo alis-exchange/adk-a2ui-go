@@ -1,0 +1,3 @@
+{"name":"generic error for a function call","version":"v1.0",
+ "message":{"version":"v1.0","error":{"code":"INVALID_FUNCTION_CALL","functionCallId":"fc-9","message":"not registered"}},
+ "wantString":"renderer error INVALID_FUNCTION_CALL for function call \"fc-9\": not registered"}

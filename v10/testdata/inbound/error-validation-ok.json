@@ -1,0 +1,3 @@
+{"name":"validation error","version":"v1.0",
+ "message":{"version":"v1.0","error":{"code":"UNALLOWED_CHILD","surfaceId":"s1","path":"/components/3","message":"Text cannot hold children"}},
+ "wantString":"renderer error UNALLOWED_CHILD on surface \"s1\" at /components/3: Text cannot hold children"}

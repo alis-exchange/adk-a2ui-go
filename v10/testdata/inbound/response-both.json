@@ -1,0 +1,3 @@
+{"name":"response with value and error","version":"v1.0",
+ "message":{"version":"v1.0","rendererFunctionResponse":{"functionCallId":"fc-1","value":1,"error":{"code":"X","message":"m"}}},
+ "wantPaths":["rendererFunctionResponse"],"wantContains":["rendererFunctionResponse"]}

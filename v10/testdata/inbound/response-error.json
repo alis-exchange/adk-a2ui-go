@@ -1,0 +1,3 @@
+{"name":"response with error","version":"v1.0",
+ "message":{"version":"v1.0","rendererFunctionResponse":{"functionCallId":"fc-1","error":{"code":"INVALID_FUNCTION_CALL","message":"not registered"}}},
+ "wantString":"INVALID_FUNCTION_CALL: not registered"}
