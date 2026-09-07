@@ -37,6 +37,27 @@ func TestRegistry(t *testing.T) {
 	}
 }
 
+func TestRegistryIsolatesCallerMutation(t *testing.T) {
+	r := NewRegistry()
+	cat := map[string]any{"catalogId": "acme:ui", "title": "original"}
+	if err := r.Register(cat); err != nil {
+		t.Fatal(err)
+	}
+	cat["title"] = "changed"
+	cat["extra"] = "added"
+
+	got, ok, err := r.ResolveCatalog(context.Background(), "acme:ui")
+	if err != nil || !ok {
+		t.Fatalf("got %v %v %v", got, ok, err)
+	}
+	if got["title"] != "original" {
+		t.Errorf("resolved catalog picked up caller mutation to title: %v", got["title"])
+	}
+	if _, has := got["extra"]; has {
+		t.Errorf("resolved catalog picked up caller mutation adding a key: %v", got)
+	}
+}
+
 func TestChain(t *testing.T) {
 	first := stubResolver{cats: map[string]map[string]any{"a": {"catalogId": "a", "from": "first"}}}
 	second := stubResolver{cats: map[string]map[string]any{"a": {"catalogId": "a", "from": "second"}, "b": {"catalogId": "b"}}}

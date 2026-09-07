@@ -53,19 +53,27 @@ func CapabilitiesFromContext(ctx context.Context) (Capabilities, bool) {
 	return caps, ok
 }
 
-// ParseCapabilities converts a raw document into Capabilities. Versions whose value is not an
-// object, or whose supportedCatalogIds contains non-strings, are omitted and reported in the
-// joined error; well-formed versions are still returned.
+// ParseCapabilities converts a raw document into Capabilities. A document is treated as the
+// legacy flat shape (wrapped as {"v0.9": doc}) only when it has a top-level supportedCatalogIds
+// and no top-level key that looks like a version (one starting with "v" followed by a digit);
+// otherwise it is parsed as version-keyed, and any top-level supportedCatalogIds/inlineCatalogs
+// are skipped and reported in the joined error instead of being silently dropped. Versions whose
+// value is not an object, or whose supportedCatalogIds contains non-strings, are also omitted and
+// reported in the joined error; well-formed versions are still returned.
 func ParseCapabilities(doc map[string]any) (Capabilities, error) {
 	if doc == nil {
 		return nil, errors.New("kit: nil capabilities document")
 	}
-	if _, legacy := doc["supportedCatalogIds"]; legacy {
+	if _, legacy := doc["supportedCatalogIds"]; legacy && !hasVersionLikeKey(doc) {
 		doc = map[string]any{V09: doc}
 	}
 	caps := Capabilities{}
 	var errs []error
 	for version, raw := range doc {
+		if version == "supportedCatalogIds" || version == "inlineCatalogs" {
+			errs = append(errs, fmt.Errorf("kit: capabilities document mixes a legacy flat shape with version keys; top-level %q ignored", version))
+			continue
+		}
 		obj, ok := raw.(map[string]any)
 		if !ok {
 			errs = append(errs, fmt.Errorf("kit: capabilities[%q]: got %T, want object", version, raw))
@@ -79,6 +87,17 @@ func ParseCapabilities(doc map[string]any) (Capabilities, error) {
 		caps[version] = params
 	}
 	return caps, errors.Join(errs...)
+}
+
+// hasVersionLikeKey reports whether doc has a top-level key that looks like a wire version, i.e.
+// one starting with "v" followed by a digit (e.g. "v0.9", "v1.0").
+func hasVersionLikeKey(doc map[string]any) bool {
+	for key := range doc {
+		if len(key) >= 2 && key[0] == 'v' && key[1] >= '0' && key[1] <= '9' {
+			return true
+		}
+	}
+	return false
 }
 
 func parseParams(obj map[string]any) (VersionParams, error) {

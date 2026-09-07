@@ -25,15 +25,24 @@ func NewRegistry() *Registry {
 	return &Registry{catalogs: map[string]map[string]any{}}
 }
 
-// Register stores catalog under its "catalogId"; a later Register with the same id replaces it.
+// Register stores a deep copy of catalog under its "catalogId", so later mutations to the
+// caller's map have no effect on the registry; a later Register with the same id replaces it.
 func (r *Registry) Register(catalog map[string]any) error {
 	id, _ := catalog["catalogId"].(string)
 	if id == "" {
 		return errors.New("kit: catalog has no string catalogId")
 	}
+	data, err := json.Marshal(catalog)
+	if err != nil {
+		return fmt.Errorf("kit: copy catalog %q: %w", id, err)
+	}
+	var cp map[string]any
+	if err := json.Unmarshal(data, &cp); err != nil {
+		return fmt.Errorf("kit: copy catalog %q: %w", id, err)
+	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	r.catalogs[id] = catalog
+	r.catalogs[id] = cp
 	return nil
 }
 
@@ -46,6 +55,8 @@ func (r *Registry) RegisterJSON(data []byte) error {
 	return r.Register(catalog)
 }
 
+// ResolveCatalog looks up the catalog registered under id. The returned document is shared with
+// every other caller and must not be mutated.
 func (r *Registry) ResolveCatalog(_ context.Context, id string) (map[string]any, bool, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()

@@ -3,6 +3,7 @@ package kit
 import (
 	"context"
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -34,6 +35,21 @@ func TestParseCapabilitiesLegacyFlatMap(t *testing.T) {
 	}
 	if got := caps[V09].SupportedCatalogIDs; !reflect.DeepEqual(got, []string{"x"}) {
 		t.Errorf("legacy map not wrapped as v0.9: %+v", caps)
+	}
+}
+
+func TestParseCapabilitiesMixedShape(t *testing.T) {
+	doc := map[string]any{
+		"supportedCatalogIds": []any{"x"},
+		"v1.0":                map[string]any{"supportedCatalogIds": []any{"y"}},
+	}
+	caps, err := ParseCapabilities(doc)
+	if err == nil || !strings.Contains(err.Error(), "mixes a legacy flat shape") {
+		t.Fatalf("expected mixed-shape error, got %v", err)
+	}
+	want := Capabilities{V10: {SupportedCatalogIDs: []string{"y"}}}
+	if !reflect.DeepEqual(caps, want) {
+		t.Errorf("got %+v", caps)
 	}
 }
 
