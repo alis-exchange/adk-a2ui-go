@@ -38,14 +38,18 @@ func WithStrictCatalogs() Option {
 	return func(c *config) { c.tools.Strict = true }
 }
 
-// NewToolset returns the version-negotiated A2UI toolset. On each turn it reads the client's
-// capabilities (kit.WithA2UICapabilities), picks the newest version both sides support, and
-// exposes that version's a2ui_catalog and generate_a2ui_messages tools. Without capabilities,
-// or without a mutual version, it exposes nothing.
+// NewToolset returns the version-negotiated A2UI toolset. A transport adapter stores the
+// client's capabilities on the context with [kit.WithA2UICapabilities]; on each turn the
+// toolset reads them, picks the newest version both sides support, and exposes that version's
+// a2ui_catalog and generate_a2ui_messages tools. Without capabilities, or without a mutual
+// version, it exposes nothing.
 func NewToolset(opts ...Option) (tool.Toolset, error) {
 	cfg := config{versions: kit.KnownVersions}
 	for _, o := range opts {
 		o(&cfg)
+	}
+	if len(cfg.versions) == 0 {
+		return nil, fmt.Errorf("a2ui: WithVersions requires at least one version")
 	}
 	for _, v := range cfg.versions {
 		switch v {
