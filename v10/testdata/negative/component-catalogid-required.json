@@ -1,0 +1,4 @@
+{"name":"component catalogId required","version":"v1.0","strict":true,
+ "messages":[{"version":"v1.0","createSurface":{"surfaceId":"s"}},
+             {"version":"v1.0","updateComponents":{"surfaceId":"s","components":[{"id":"root","component":"Text","text":"hi"}]}}],
+ "wantPaths":["messages[1].updateComponents.components[0]"],"wantContains":["catalogId"]}

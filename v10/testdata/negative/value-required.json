@@ -1,0 +1,3 @@
+{"name":"value required","version":"v1.0","strict":true,
+ "messages":[{"version":"v1.0","updateDataModel":{"surfaceId":"s","path":"/x"}}],
+ "wantPaths":["messages[0].updateDataModel"],"wantContains":["missing property \"value\""]}

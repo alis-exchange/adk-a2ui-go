@@ -1,0 +1,8 @@
+{"name":"duplicate component id","version":"v1.0","strict":true,
+ "messages":[{"version":"v1.0","createSurface":{"surfaceId":"s","catalogId":"https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json"}},
+             {"version":"v1.0","updateComponents":{"surfaceId":"s","components":[
+               {"id":"root","component":"Column","children":["a"]},
+               {"id":"a","component":"Text","text":"x"},
+               {"id":"a","component":"Text","text":"y"}
+             ]}}],
+ "wantPaths":["messages[1].updateComponents.components[2].id"],"wantContains":["duplicate component id \"a\""]}
