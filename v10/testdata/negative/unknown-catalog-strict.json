@@ -1,4 +1,4 @@
 {"name":"unknown catalog in strict mode","version":"v1.0","strict":true,
  "messages":[{"version":"v1.0","createSurface":{"surfaceId":"s","catalogId":"https://example.com/nope.json"}},
              {"version":"v1.0","updateComponents":{"surfaceId":"s","components":[{"id":"root","component":"Text","text":"hi"}]}}],
- "wantPaths":["messages[1].updateComponents.components[0].catalogId"],"wantContains":["not available"]}
+ "wantPaths":["messages[0].createSurface.catalogId"],"wantContains":["not available"]}

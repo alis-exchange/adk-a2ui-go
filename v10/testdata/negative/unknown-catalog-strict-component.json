@@ -1,0 +1,4 @@
+{"name":"unknown catalog in strict mode set on the component","version":"v1.0","strict":true,
+ "messages":[{"version":"v1.0","createSurface":{"surfaceId":"s"}},
+             {"version":"v1.0","updateComponents":{"surfaceId":"s","components":[{"id":"root","component":"Text","text":"hi","catalogId":"https://example.com/nope.json"}]}}],
+ "wantPaths":["messages[1].updateComponents.components[0].catalogId"],"wantContains":["not available"]}

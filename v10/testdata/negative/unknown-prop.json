@@ -1,4 +1,4 @@
 {"name":"unknown property","version":"v1.0","strict":true,
  "messages":[{"version":"v1.0","createSurface":{"surfaceId":"s","catalogId":"https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json"}},
-             {"version":"v1.0","updateComponents":{"surfaceId":"s","colour":"red","components":[{"id":"root","component":"Text","text":"hi"}]}}],
- "wantPaths":["messages[1].updateComponents"],"wantContains":["unknown properties \"colour\""]}
+             {"version":"v1.0","updateComponents":{"surfaceId":"s","components":[{"id":"root","component":"Text","text":"hi","colour":"red"}]}}],
+ "wantPaths":["messages[1].updateComponents.components[0]"],"wantContains":["unknown property \"colour\""]}

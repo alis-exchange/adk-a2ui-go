@@ -13,6 +13,19 @@ import (
 // CatalogIDBasic is the canonical id of the spec's basic catalog for v1.0.
 const CatalogIDBasic = "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json"
 
+// refComponent and refFunctionCall are the full envelope-level definitions a component or
+// function call must satisfy once its catalog is known: each combines the catalog's bare
+// discriminated union (schema.RefAnyComponent / schema.RefAnyFunction) with the envelope's
+// common properties (id/catalogId/accessibility/metadata, or call/catalogId) and closes the
+// schema with unevaluatedProperties:false. Validating against the catalog union alone (as the
+// bare Ref constants do) would miss unknown properties, since v1.0's basic catalog components
+// declare no additionalProperties/unevaluatedProperties of their own -- that closure exists only
+// once, centrally, on these two definitions.
+const (
+	refComponent    = "agent_to_renderer.json#/$defs/Component"
+	refFunctionCall = "common_types.json#/$defs/FunctionCall"
+)
+
 // Validate checks messages and returns nil or a *schema.ValidationError listing every problem.
 func Validate(ctx context.Context, messages []map[string]any, opts kit.ValidateOptions) error {
 	if opts.Version != "" && opts.Version != kit.V10 {
@@ -88,15 +101,19 @@ func createdSurfaces(messages []map[string]any) map[string]surfaceInfo {
 }
 
 // catalogFor applies the v1.0 fallback: the component's own catalogId, else the surface's.
-// Returns "" when neither is known for this batch.
-func catalogFor(comp map[string]any, surface surfaceInfo, created bool) string {
-	if cid, _ := comp["catalogId"].(string); cid != "" {
-		return cid
+// cid is "" when neither is known for this batch. lookupPath is where a strict-mode "catalog
+// not available" finding belongs: the component's own catalogId property when the component set
+// one, or the creating surface's createSurface.catalogId when the id was inherited (so every
+// component that silently inherits the same missing catalog from one surface collapses, via
+// finalize, into a single finding attached to that surface instead of one per component).
+func catalogFor(comp map[string]any, componentPath string, surface surfaceInfo, created bool) (cid, lookupPath string) {
+	if own, _ := comp["catalogId"].(string); own != "" {
+		return own, componentPath + ".catalogId"
 	}
 	if created {
-		return surface.catalogID
+		return surface.catalogID, fmt.Sprintf("messages[%d].createSurface.catalogId", surface.index)
 	}
-	return ""
+	return "", ""
 }
 
 func validateAgainstCatalogs(ctx context.Context, eng *schema.Engine, messages []map[string]any, opts kit.ValidateOptions) ([]schema.Problem, error) {
@@ -104,11 +121,20 @@ func validateAgainstCatalogs(ctx context.Context, eng *schema.Engine, messages [
 	surfaces := createdSurfaces(messages)
 	resolved := map[string]map[string]any{}
 	missing := map[string]bool{}
+	// lookup resolves cid, caching both hits and misses. Unlike the cache, problem reporting is
+	// not gated to "first attempt only": every call site that fails to resolve cid appends its
+	// own (possibly repeated) finding at its own path, and finalize's (Path, Message) dedup is
+	// what collapses repeats that share a path (e.g. several components inheriting the same
+	// missing catalog from one surface) down to one, while still keeping distinct paths (e.g.
+	// several components that each set that same missing catalogId themselves) separate.
 	lookup := func(cid, path string) (map[string]any, bool, error) {
 		if c, ok := resolved[cid]; ok {
 			return c, true, nil
 		}
 		if missing[cid] {
+			if opts.Strict {
+				problems = append(problems, schema.Problem{Path: path, Message: fmt.Sprintf("catalog %q is not available to this agent (not inline, registered, or built in)", cid)})
+			}
 			return nil, false, nil
 		}
 		c, ok, err := schema.ResolveCatalog(ctx, spec.MajorV10, cid, opts)
@@ -130,21 +156,21 @@ func validateAgainstCatalogs(ctx context.Context, eng *schema.Engine, messages [
 		for j, c := range comps {
 			comp, _ := c.(map[string]any)
 			path := fmt.Sprintf("%s[%d]", basePath, j)
-			cid := catalogFor(comp, info, created)
+			cid, lookupPath := catalogFor(comp, path, info, created)
 			if cid == "" {
 				if created { // surface exists in this batch but named no catalog: the component must
 					problems = append(problems, schema.Problem{Path: path, Message: fmt.Sprintf("must set catalogId because surface %q was created without one", sid)})
 				}
 				continue
 			}
-			cat, ok, err := lookup(cid, path+".catalogId")
+			cat, ok, err := lookup(cid, lookupPath)
 			if err != nil {
 				return err
 			}
 			if !ok {
 				continue
 			}
-			s, err := eng.CompileRef(schema.RefAnyComponent, cat, false)
+			s, err := eng.CompileRef(refComponent, cat, false)
 			if err != nil {
 				return err
 			}
@@ -185,7 +211,7 @@ func validateAgainstCatalogs(ctx context.Context, eng *schema.Engine, messages [
 			if !ok {
 				continue
 			}
-			s, err := eng.CompileRef(schema.RefAnyFunction, cat, false)
+			s, err := eng.CompileRef(refFunctionCall, cat, false)
 			if err != nil {
 				return nil, err
 			}
