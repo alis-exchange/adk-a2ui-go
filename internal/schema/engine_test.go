@@ -2,6 +2,7 @@ package schema
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -117,5 +118,90 @@ func TestToInstance(t *testing.T) {
 	}
 	if _, ok := got[0].(map[string]any); !ok {
 		t.Error("element type")
+	}
+}
+
+func TestInboundEntriesCompile(t *testing.T) {
+	cases := []struct {
+		major, entry string
+		v091         bool
+	}{
+		{spec.MajorV09, EntryInboundV09, false},
+		{spec.MajorV09, EntryInboundV09, true},
+		{spec.MajorV10, EntryInboundV10, false},
+	}
+	for _, tc := range cases {
+		if _, err := For(tc.major).Compile(CompileOptions{Entry: tc.entry, V091: tc.v091}); err != nil {
+			t.Errorf("%s v091=%v: %v", tc.entry, tc.v091, err)
+		}
+	}
+	cat, _, _, _ := spec.BasicCatalog(spec.MajorV10)
+	s, err := For(spec.MajorV10).Compile(CompileOptions{Entry: EntryInboundV10, Catalog: cat})
+	if err != nil {
+		t.Fatal(err)
+	}
+	basic := "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json"
+	msg := func(call map[string]any) map[string]any {
+		return map[string]any{"version": "v1.0", "callAgentFunction": map[string]any{"surfaceId": "s", "functionCallId": "c1", "callFunction": call}}
+	}
+	nested := map[string]any{"call": "formatDate", "catalogId": basic, "args": map[string]any{"value": "2026-01-01", "format": "yyyy"}}
+	if err := s.Validate(msg(nested)); err != nil {
+		t.Errorf("nested args rejected: %v", err)
+	}
+	flat := map[string]any{"call": "formatDate", "catalogId": basic, "value": "2026-01-01", "format": "yyyy"}
+	if err := s.Validate(msg(flat)); err == nil {
+		t.Error("flat args accepted; the spec nests them under \"args\"")
+	}
+}
+
+// minimalCatalog is the smallest document CompileRef(RefAnyComponent, ...) accepts, with a
+// distinct id so each one gets its own cache key.
+func minimalCatalog(i int) map[string]any {
+	return map[string]any{
+		"catalogId": fmt.Sprintf("https://example.com/cache-%d.json", i),
+		"$defs":     map[string]any{"anyComponent": map[string]any{"type": "object"}},
+	}
+}
+
+func TestCompileCacheIsBounded(t *testing.T) {
+	e := newEngine(spec.MajorV10)
+	first, err := e.Compile(CompileOptions{Entry: EntryOutboundV10})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Fill the cache past capacity with distinct catalogs; the entry schema is the oldest.
+	for i := 0; i < maxCachedSchemas; i++ {
+		if _, err := e.CompileRef(RefAnyComponent, minimalCatalog(i), false); err != nil {
+			t.Fatal(err)
+		}
+	}
+	again, _ := e.Compile(CompileOptions{Entry: EntryOutboundV10})
+	if again == first {
+		t.Error("least recently used schema was not evicted")
+	}
+	last, _ := e.CompileRef(RefAnyComponent, minimalCatalog(maxCachedSchemas-1), false)
+	lastAgain, _ := e.CompileRef(RefAnyComponent, minimalCatalog(maxCachedSchemas-1), false)
+	if last != lastAgain {
+		t.Error("recently used schema was evicted")
+	}
+}
+
+func TestCompileCacheHitRefreshesRecency(t *testing.T) {
+	e := newEngine(spec.MajorV10)
+	first, _ := e.Compile(CompileOptions{Entry: EntryOutboundV10})
+	for i := 0; i < maxCachedSchemas-1; i++ { // cache is now exactly full
+		if _, err := e.CompileRef(RefAnyComponent, minimalCatalog(i), false); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if hit, _ := e.Compile(CompileOptions{Entry: EntryOutboundV10}); hit != first {
+		t.Fatal("expected a cache hit")
+	}
+	// One more entry evicts catalog 0, the oldest untouched entry, not the refreshed one.
+	if _, err := e.CompileRef(RefAnyComponent, minimalCatalog(maxCachedSchemas-1), false); err != nil {
+		t.Fatal(err)
+	}
+	if again, _ := e.Compile(CompileOptions{Entry: EntryOutboundV10}); again != first {
+		t.Error("a cache hit must move the entry to the front")
 	}
 }

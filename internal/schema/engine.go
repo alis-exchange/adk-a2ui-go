@@ -2,6 +2,7 @@ package schema
 
 import (
 	"bytes"
+	"container/list"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -18,10 +19,14 @@ import (
 	"go.alis.build/adk/a2ui/spec"
 )
 
-// Entry schema files, relative to spec/<major>/json.
+// Entry schema files, relative to spec/<major>/json. Outbound entries are message lists
+// (the tools validate a whole batch); inbound entries are single messages (a transport hands
+// the agent one renderer message at a time, and the decoders add list handling themselves).
 const (
 	EntryOutboundV09 = "server_to_client_list.json"
 	EntryOutboundV10 = "agent_to_renderer_list.json"
+	EntryInboundV09  = "client_to_server.json"
+	EntryInboundV10  = "renderer_to_agent.json"
 )
 
 // Catalog-relative references the spec uses; CompileRef wraps one of these.
@@ -39,15 +44,62 @@ type CompileOptions struct {
 	V091    bool           // v0_9 only: accept "v0.9.1" as well as "v0.9"
 }
 
-// Engine compiles schemas for one major version and caches them.
+// maxCachedSchemas bounds the compiled schemas each engine keeps. Cache keys include a digest
+// of the catalog, and inline catalogs arrive from clients, so without a bound every distinct
+// client catalog would stay compiled for the life of the process.
+const maxCachedSchemas = 64
+
+// Engine compiles schemas for one major version and keeps the most recently used ones.
 type Engine struct {
 	major string
-	cache sync.Map // string -> *jsonschema.Schema
+	mu    sync.Mutex
+	cache map[string]*list.Element // key -> element holding a cacheEntry
+	order *list.List               // front is the most recently used
+}
+
+type cacheEntry struct {
+	key    string
+	schema *jsonschema.Schema
+}
+
+func newEngine(major string) *Engine {
+	return &Engine{major: major, cache: map[string]*list.Element{}, order: list.New()}
 }
 
 var engines = map[string]*Engine{
-	spec.MajorV09: {major: spec.MajorV09},
-	spec.MajorV10: {major: spec.MajorV10},
+	spec.MajorV09: newEngine(spec.MajorV09),
+	spec.MajorV10: newEngine(spec.MajorV10),
+}
+
+// lookup returns the cached schema for key and marks it most recently used.
+func (e *Engine) lookup(key string) (*jsonschema.Schema, bool) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	el, ok := e.cache[key]
+	if !ok {
+		return nil, false
+	}
+	e.order.MoveToFront(el)
+	return el.Value.(cacheEntry).schema, true
+}
+
+// store keeps s under key unless another goroutine stored one first (the same
+// load-or-store rule sync.Map gave us: both callers end up with one pointer), then evicts the
+// least recently used entries past maxCachedSchemas. It returns the schema now held for key.
+func (e *Engine) store(key string, s *jsonschema.Schema) *jsonschema.Schema {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if el, ok := e.cache[key]; ok {
+		e.order.MoveToFront(el)
+		return el.Value.(cacheEntry).schema
+	}
+	e.cache[key] = e.order.PushFront(cacheEntry{key: key, schema: s})
+	for e.order.Len() > maxCachedSchemas {
+		oldest := e.order.Back()
+		e.order.Remove(oldest)
+		delete(e.cache, oldest.Value.(cacheEntry).key)
+	}
+	return s
 }
 
 // For returns the engine for an embedded major directory (spec.MajorV09 or spec.MajorV10).
@@ -69,9 +121,11 @@ func (e *Engine) CompileRef(ref string, catalog map[string]any, v091 bool) (*jso
 }
 
 func (e *Engine) compile(key, loc string, resource map[string]any, opts CompileOptions) (*jsonschema.Schema, error) {
-	if s, ok := e.cache.Load(key); ok {
-		return s.(*jsonschema.Schema), nil
+	if s, ok := e.lookup(key); ok {
+		return s, nil
 	}
+	// ... existing compiler setup and c.Compile(loc) unchanged; compilation runs outside the
+	// lock because it is slow and pure.
 	c := jsonschema.NewCompiler()
 	c.UseLoader(&loader{major: e.major, catalog: opts.Catalog, v091: opts.V091})
 	c.UseRegexpEngine(goRegexp)
@@ -88,8 +142,7 @@ func (e *Engine) compile(key, loc string, resource map[string]any, opts CompileO
 	if err != nil {
 		return nil, fmt.Errorf("schema: compile %s: %w", loc, err)
 	}
-	actual, _ := e.cache.LoadOrStore(key, s)
-	return actual.(*jsonschema.Schema), nil
+	return e.store(key, s), nil
 }
 
 // ToInstance converts tool input into the value shape the validator accepts.
