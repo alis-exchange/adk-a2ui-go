@@ -1,6 +1,6 @@
 package kit
 
-// ValidateOptions is shared by v09.Validate and v10.Validate.
+// ValidateOptions is shared by v09.Validate, v10.Validate, and v10.DecodeRendererMessage.
 type ValidateOptions struct {
 	// Version is the exact wire version every message must carry. Empty accepts whatever the
 	// schema allows (for v09 that is both "v0.9" and "v0.9.1").

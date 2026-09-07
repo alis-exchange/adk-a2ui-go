@@ -12,4 +12,8 @@
 //
 //	var ve *kit.ValidationError
 //	if errors.As(err, &ve) { ... }
+//
+// The same [ValidateOptions] drive the inbound decoders
+// ([go.alis.build/adk/a2ui/v10.DecodeRendererMessage]), so a renderer's call to an agent
+// function is checked against the same inline, registered, and built-in catalogs.
 package kit
