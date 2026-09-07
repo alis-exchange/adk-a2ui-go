@@ -34,7 +34,7 @@ func toolSpec() toolkit.Spec {
 			`updateDataModel requires "value"; send null to delete the key at "path".`,
 			`createSurface has no "theme". Its "catalogId" is optional, but then every component must set its own "catalogId".`,
 			`A component may never be named "Surface". The "root" component may be placed inside createSurface.components.`,
-			`Function arguments go directly inside "callFunction" next to "call", not under an "args" key.`,
+			`Function arguments go under "args" inside "callFunction", next to "call" and "catalogId", as the catalog's function definition describes.`,
 		},
 	}
 }

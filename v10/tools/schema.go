@@ -57,9 +57,13 @@ func EnvelopeSchema() *jsonschema.Schema {
 				AdditionalProperties: &jsonschema.Schema{},
 			},
 			"functionCall": {
-				Type:                 "object",
-				Description:          "A function call: \"call\" names the function, \"catalogId\" names its catalog, and the function's own arguments sit alongside as further properties.",
-				Properties:           map[string]*jsonschema.Schema{"call": str("Required. The name of the function to call."), "catalogId": str("The catalog ID for this function.")},
+				Type:        "object",
+				Description: "A function call: \"call\" names the function, \"catalogId\" names its catalog, and the function's arguments go in the \"args\" object as the catalog's function definition describes.",
+				Properties: map[string]*jsonschema.Schema{
+					"call":      str("Required. The name of the function to call."),
+					"catalogId": str("The catalog ID for this function."),
+					"args":      {Type: "object", AdditionalProperties: &jsonschema.Schema{}, Description: "The function's arguments, keyed by argument name, as defined by the catalog function."},
+				},
 				AdditionalProperties: &jsonschema.Schema{},
 			},
 			"CreateSurfaceMessage": {

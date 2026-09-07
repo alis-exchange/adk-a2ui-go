@@ -125,3 +125,19 @@ func TestCatalogTool(t *testing.T) {
 		t.Error("instructions must be non-empty")
 	}
 }
+
+func TestFunctionArgsAreNested(t *testing.T) {
+	params := kit.VersionParams{SupportedCatalogIDs: []string{v10.CatalogIDBasic}}
+	tl, err := GenerateTool(params, kit.ToolOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	desc := tl.Description()
+	if !strings.Contains(desc, `under "args"`) || strings.Contains(desc, `not under an "args" key`) {
+		t.Error("the description must tell the model that function arguments are nested under \"args\"")
+	}
+	fc := EnvelopeSchema().Defs["functionCall"]
+	if fc == nil || fc.Properties["args"] == nil || fc.Properties["args"].Type != "object" {
+		t.Error("the functionCall $def must declare an \"args\" object")
+	}
+}
