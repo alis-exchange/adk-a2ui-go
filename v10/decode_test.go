@@ -225,6 +225,28 @@ func TestDecodeRendererMessagesListPaths(t *testing.T) {
 	}
 }
 
+// TestToRendererMessageTypedConversionFailure exercises the fallback for a field the v1.0
+// schema types today but a future upstream loosening could open up, the same way v0.9's
+// generic error already has: a value the envelope pass let through that still does not fit
+// the Go type. toRendererMessage must report that as a problem, not a plain error.
+func TestToRendererMessageTypedConversionFailure(t *testing.T) {
+	m := map[string]any{"version": "v1.0", "callAgentFunction": map[string]any{"surfaceId": "s1", "functionCallId": 5.0,
+		"callFunction": map[string]any{"call": "formatDate", "args": map[string]any{}}}}
+	_, p, err := toRendererMessage(m, "")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if p == nil {
+		t.Fatal("want a non-nil problem")
+	}
+	if p.Path != "" {
+		t.Errorf("Path = %q, want empty", p.Path)
+	}
+	if !strings.Contains(p.Message, "unexpected type") {
+		t.Errorf("Message = %q, want it to contain %q", p.Message, "unexpected type")
+	}
+}
+
 func TestRendererStringsOnZeroValues(t *testing.T) {
 	if got := (&Action{}).String(); got != `user action "" on surface "" from component "" with no context` {
 		t.Errorf("Action: %q", got)

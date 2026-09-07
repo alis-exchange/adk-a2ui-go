@@ -1,6 +1,7 @@
 package schema
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 )
@@ -38,6 +39,29 @@ func TestInboundPrecheck(t *testing.T) {
 			}
 			if strings.Join(got, "\n") != strings.Join(tc.want, "\n") {
 				t.Errorf("got:\n%s\nwant:\n%s", strings.Join(got, "\n"), strings.Join(tc.want, "\n"))
+			}
+		})
+	}
+}
+
+func TestJSONType(t *testing.T) {
+	cases := []struct {
+		name string
+		v    any
+		want string
+	}{
+		{"null", nil, "null"},
+		{"boolean", true, "boolean"},
+		{"number float64", float64(1), "number"},
+		{"number json.Number", json.Number("1"), "number"},
+		{"string", "s", "string"},
+		{"array", []any{}, "array"},
+		{"object", map[string]any{}, "object"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := JSONType(tc.v); got != tc.want {
+				t.Errorf("JSONType(%#v) = %q, want %q", tc.v, got, tc.want)
 			}
 		})
 	}

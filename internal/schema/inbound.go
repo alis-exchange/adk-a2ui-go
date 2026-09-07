@@ -1,6 +1,7 @@
 package schema
 
 import (
+	"encoding/json"
 	"fmt"
 	"sort"
 )
@@ -36,6 +37,26 @@ func InboundPrecheck(m map[string]any, version string, keys []string, path strin
 		msg = "unknown message key " + quoteList(unknown) + "; " + msg
 	}
 	return append(out, Problem{Path: path, Message: msg})
+}
+
+// JSONType names a decoded JSON value's type the way the validator's own messages do
+// ("must be of type object, got array"), so hand-written problems read like schema ones.
+func JSONType(v any) string {
+	switch v.(type) {
+	case nil:
+		return "null"
+	case bool:
+		return "boolean"
+	case float64, json.Number:
+		return "number"
+	case string:
+		return "string"
+	case []any:
+		return "array"
+	case map[string]any:
+		return "object"
+	}
+	return fmt.Sprintf("%T", v)
 }
 
 // JoinPath appends a rendered segment to a path prefix, which may be empty for a message

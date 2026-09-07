@@ -69,9 +69,13 @@ func decodeRendererMessages(ctx context.Context, ms []map[string]any, opts kit.V
 			problems = append(problems, p...)
 			continue
 		}
-		rm, err := toRendererMessage(m)
+		rm, cp, err := toRendererMessage(m, path)
 		if err != nil {
 			return nil, err
+		}
+		if cp != nil {
+			problems = append(problems, *cp)
+			continue
 		}
 		out = append(out, rm)
 	}
@@ -94,7 +98,7 @@ func checkAgentCall(ctx context.Context, eng *schema.Engine, m map[string]any, o
 	callPath := schema.JoinPath(path, "callAgentFunction.callFunction")
 	if args, present := call["args"]; present {
 		if _, isObject := args.(map[string]any); !isObject {
-			return []schema.Problem{{Path: callPath + ".args", Message: "must be of type object, got " + jsonType(args)}}, nil
+			return []schema.Problem{{Path: callPath + ".args", Message: "must be of type object, got " + schema.JSONType(args)}}, nil
 		}
 	}
 	cid, _ := call["catalogId"].(string)
@@ -121,32 +125,16 @@ func checkAgentCall(ctx context.Context, eng *schema.Engine, m map[string]any, o
 	return nil, nil
 }
 
-// jsonType names a decoded JSON value's type the way the validator's messages do.
-func jsonType(v any) string {
-	switch v.(type) {
-	case nil:
-		return "null"
-	case bool:
-		return "boolean"
-	case float64, json.Number:
-		return "number"
-	case string:
-		return "string"
-	case []any:
-		return "array"
-	case map[string]any:
-		return "object"
-	}
-	return fmt.Sprintf("%T", v)
-}
-
 // toRendererMessage converts a validated message into its typed form by way of JSON, which is
-// what the map already is; the schema has fixed every field's type by now, so a failure here
-// means a value that is not JSON at all (a channel, a func) and is reported as a plain error.
-func toRendererMessage(m map[string]any) (RendererMessage, error) {
+// what the map already is. The v1.0 schema types every mapped field today, but a future upstream
+// loosening (as v0.9's generic error already has) could let a mistyped value through the
+// envelope pass; that surfaces as a validation problem at path, not a plain error. A
+// json.Marshal failure (a value that is not JSON at all, such as a channel or a func) stays a
+// plain error, since that is a caller-side bug rather than a renderer mistake.
+func toRendererMessage(m map[string]any, path string) (RendererMessage, *schema.Problem, error) {
 	b, err := json.Marshal(m)
 	if err != nil {
-		return RendererMessage{}, fmt.Errorf("v10: encode message: %w", err)
+		return RendererMessage{}, nil, fmt.Errorf("v10: encode message: %w", err)
 	}
 	var wire struct {
 		Version string `json:"version"`
@@ -161,7 +149,7 @@ func toRendererMessage(m map[string]any) (RendererMessage, error) {
 		Error                    *RendererError     `json:"error"`
 	}
 	if err := json.Unmarshal(b, &wire); err != nil {
-		return RendererMessage{}, fmt.Errorf("v10: decode message: %w", err)
+		return RendererMessage{}, &schema.Problem{Path: path, Message: "has a field of an unexpected type: " + err.Error()}, nil
 	}
 	out := RendererMessage{
 		Version:                  wire.Version,
@@ -177,5 +165,5 @@ func toRendererMessage(m map[string]any) (RendererMessage, error) {
 		}
 		out.Action = &a
 	}
-	return out, nil
+	return out, nil, nil
 }

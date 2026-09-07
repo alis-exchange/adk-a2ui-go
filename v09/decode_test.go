@@ -11,6 +11,27 @@ import (
 	"go.alis.build/adk/a2ui/kit"
 )
 
+// TestToClientMessageTypedConversionFailure exercises the fallback the guard in
+// decodeClientMessages cannot reach through the public API once every known typed-conversion
+// hole has a curated check in front of it: a field the schema pass let through but that still
+// does not fit the Go type. toClientMessage must report that as a problem, not a plain error.
+func TestToClientMessageTypedConversionFailure(t *testing.T) {
+	m := map[string]any{"version": "v0.9", "action": map[string]any{"name": 5.0, "surfaceId": "s", "sourceComponentId": "c", "timestamp": "t", "context": map[string]any{}}}
+	_, p, err := toClientMessage(m, "")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if p == nil {
+		t.Fatal("want a non-nil problem")
+	}
+	if p.Path != "" {
+		t.Errorf("Path = %q, want empty", p.Path)
+	}
+	if !strings.Contains(p.Message, "unexpected type") {
+		t.Errorf("Message = %q, want it to contain %q", p.Message, "unexpected type")
+	}
+}
+
 type inboundCase struct {
 	Name         string         `json:"name"`
 	Version      string         `json:"version"`

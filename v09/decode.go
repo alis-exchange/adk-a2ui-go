@@ -55,13 +55,30 @@ func decodeClientMessages(ms []map[string]any, version, prefix string) ([]Client
 				p = schema.Format(err, m, path)
 			}
 		}
+		if len(p) == 0 {
+			// client_to_server.json types the generic error's "code" only as "not
+			// VALIDATION_FAILED", so a number passes the envelope pass and would otherwise
+			// blow up the typed conversion below; catch it here with the same message shape
+			// the schema itself would use.
+			if e, ok := m["error"].(map[string]any); ok {
+				if code, present := e["code"]; present {
+					if _, isString := code.(string); !isString {
+						p = []schema.Problem{{Path: schema.JoinPath(path, "error.code"), Message: "must be of type string, got " + schema.JSONType(code)}}
+					}
+				}
+			}
+		}
 		if len(p) > 0 {
 			problems = append(problems, p...)
 			continue
 		}
-		cm, err := toClientMessage(m)
+		cm, cp, err := toClientMessage(m, path)
 		if err != nil {
 			return nil, err
+		}
+		if cp != nil {
+			problems = append(problems, *cp)
+			continue
 		}
 		out = append(out, cm)
 	}
@@ -72,12 +89,15 @@ func decodeClientMessages(ms []map[string]any, version, prefix string) ([]Client
 }
 
 // toClientMessage converts a validated message into its typed form by way of JSON, which is
-// what the map already is; the schema has fixed every field's type by now, so a failure here
-// means a value that is not JSON at all (a channel, a func) and is reported as a plain error.
-func toClientMessage(m map[string]any) (ClientMessage, error) {
+// what the map already is. The v0.9 schema does not type every field (the generic error's code,
+// guarded above, is one gap of possibly several), so a value the envelope pass let through can
+// still fail here; that surfaces as a validation problem at path, not a plain error. A
+// json.Marshal failure (a value that is not JSON at all, such as a channel or a func) stays a
+// plain error, since that is a caller-side bug rather than a renderer mistake.
+func toClientMessage(m map[string]any, path string) (ClientMessage, *schema.Problem, error) {
 	b, err := json.Marshal(m)
 	if err != nil {
-		return ClientMessage{}, fmt.Errorf("v09: encode message: %w", err)
+		return ClientMessage{}, nil, fmt.Errorf("v09: encode message: %w", err)
 	}
 	var wire struct {
 		Version string       `json:"version"`
@@ -85,7 +105,7 @@ func toClientMessage(m map[string]any) (ClientMessage, error) {
 		Error   *ClientError `json:"error"`
 	}
 	if err := json.Unmarshal(b, &wire); err != nil {
-		return ClientMessage{}, fmt.Errorf("v09: decode message: %w", err)
+		return ClientMessage{}, &schema.Problem{Path: path, Message: "has a field of an unexpected type: " + err.Error()}, nil
 	}
-	return ClientMessage{Version: wire.Version, Action: wire.Action, Error: wire.Error, Raw: m}, nil
+	return ClientMessage{Version: wire.Version, Action: wire.Action, Error: wire.Error, Raw: m}, nil, nil
 }
