@@ -130,8 +130,8 @@ func TestCallRendererFunctionValidated(t *testing.T) {
 		},
 	}}
 	err := Validate(context.Background(), msgs, kit.ValidateOptions{Version: kit.V10, Strict: true})
-	if err == nil || !strings.Contains(err.Error(), "messages[0].callRendererFunction.callFunction") {
-		t.Errorf("unknown function should be reported at the call path, got %v", err)
+	if err == nil || !strings.Contains(err.Error(), `messages[0].callRendererFunction.callFunction: unknown function "noSuchFunction"`) {
+		t.Errorf("unknown function should be reported once at the call path, got %v", err)
 	}
 }
 

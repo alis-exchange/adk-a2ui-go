@@ -3,6 +3,7 @@ package schema
 import (
 	"encoding/json"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/santhosh-tekuri/jsonschema/v6"
@@ -82,5 +83,68 @@ func TestFormatEmptyOneOfCausesDoesNotPanic(t *testing.T) {
 	}
 	if got[0].Path != "root.foo" {
 		t.Errorf("got Path %q, want %q", got[0].Path, "root.foo")
+	}
+}
+
+func functionCallSchema(t *testing.T) *jsonschema.Schema {
+	t.Helper()
+	cat, _, _, err := spec.BasicCatalog(spec.MajorV10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s, err := For(spec.MajorV10).CompileRef("common_types.json#/$defs/FunctionCall", cat, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return s
+}
+
+func TestFormatPrunesFunctionUnionByCall(t *testing.T) {
+	s := functionCallSchema(t)
+	basic := "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json"
+	cases := []struct {
+		name string
+		call map[string]any
+		want []string // exact problem lines, in order
+	}{
+		{"flat args", map[string]any{"call": "formatDate", "catalogId": basic, "value": "x", "format": "y"},
+			[]string{`cf: missing property "args"`}},
+		{"missing arg", map[string]any{"call": "formatDate", "catalogId": basic, "args": map[string]any{"value": "x"}},
+			[]string{`cf.args: missing property "format"`}},
+		{"unknown arg", map[string]any{"call": "formatDate", "catalogId": basic, "args": map[string]any{"value": "x", "format": "y", "zzz": 1}},
+			[]string{`cf.args: unknown property "zzz"`}},
+		{"unknown function", map[string]any{"call": "noSuchFunction", "catalogId": basic, "args": map[string]any{}},
+			[]string{`cf: unknown function "noSuchFunction" (catalog functions: and, email, formatCurrency, formatDate, formatNumber, formatString, length, not, numeric, openUrl, or, pluralize, regex, required)`}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := s.Validate(tc.call)
+			if err == nil {
+				t.Fatal("expected a validation error")
+			}
+			var got []string
+			for _, p := range Format(err, tc.call, "cf") {
+				got = append(got, p.String())
+			}
+			if strings.Join(got, "\n") != strings.Join(tc.want, "\n") {
+				t.Errorf("got:\n%s\nwant:\n%s", strings.Join(got, "\n"), strings.Join(tc.want, "\n"))
+			}
+		})
+	}
+}
+
+func TestFormatIndexFunctionBranch(t *testing.T) {
+	s := functionCallSchema(t)
+	call := map[string]any{"call": "@index", "args": map[string]any{"offset": "bad"}}
+	err := s.Validate(call)
+	if err == nil {
+		t.Fatal("expected a validation error")
+	}
+	text := ""
+	for _, p := range Format(err, call, "cf") {
+		text += p.String() + "\n"
+	}
+	if !strings.Contains(text, "cf.args.offset: must be of type number") || strings.Contains(text, `must be "required"`) {
+		t.Errorf("@index must select the IndexSystemFunction branch, got:\n%s", text)
 	}
 }

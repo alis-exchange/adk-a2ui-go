@@ -129,21 +129,43 @@ func pruneCollateralFalseSchema(causes []*jsonschema.ValidationError) []*jsonsch
 
 // walkOneOf selects the branch that matches the instance. Returns false when no selection
 // strategy applies, so the caller falls back to walking every cause.
+//
+// Three unions are recognised by the basename of each branch's $ref: catalog components
+// (#/components/<name>, matched by the instance's "component"), envelope messages
+// (<Key>Message, matched by the present message key), and catalog functions
+// (#/functions/<name>, matched by the instance's "call"). Function calls sit two unions deep:
+// common_types.json's FunctionCall is oneOf[catalog anyFunction, IndexSystemFunction], and the
+// catalog's anyFunction is the union of its functions. A call therefore descends into the
+// "anyFunction" branch and lets that inner union pick by name; "@index" is the one function
+// defined outside the catalog and selects the IndexSystemFunction branch instead.
 func (f *formatter) walkOneOf(e *jsonschema.ValidationError) bool {
 	v, _ := f.valueAt(e.InstanceLocation)
 	inst, ok := v.(map[string]any)
 	if !ok {
 		return false
 	}
-	var branchNames []string
+	names := make([]string, 0, len(e.Causes))
 	for _, c := range e.Causes {
 		ref, ok := c.ErrorKind.(*kind.Reference)
 		if !ok {
 			return false
 		}
-		name := path.Base(ref.URL)
-		branchNames = append(branchNames, name)
-		if comp, _ := inst["component"].(string); comp != "" && name == comp {
+		names = append(names, path.Base(ref.URL))
+	}
+	if len(names) == 0 {
+		// No Reference-shaped causes to pick a branch from (e.g. an ambiguous oneOf with nil
+		// Causes). Let the caller fall back to walking generically.
+		return false
+	}
+	comp, _ := inst["component"].(string)
+	call, _ := inst["call"].(string)
+	for i, c := range e.Causes {
+		name := names[i]
+		if comp != "" && name == comp {
+			f.walk(c)
+			return true
+		}
+		if call != "" && (name == call || (call == "@index" && name == "IndexSystemFunction")) {
 			f.walk(c)
 			return true
 		}
@@ -154,19 +176,28 @@ func (f *formatter) walkOneOf(e *jsonschema.ValidationError) bool {
 			}
 		}
 	}
-	if len(branchNames) == 0 {
-		// No Reference-shaped causes to pick a branch from (e.g. an ambiguous oneOf with nil
-		// Causes). Let the caller fall back to walking generically.
-		return false
+	if call != "" && call != "@index" {
+		for i, c := range e.Causes {
+			if names[i] == "anyFunction" {
+				f.walk(c)
+				return true
+			}
+		}
 	}
-	sort.Strings(branchNames)
-	if comp, _ := inst["component"].(string); comp != "" {
-		f.add(e.InstanceLocation, fmt.Sprintf("unknown component %q (catalog components: %s)", comp, strings.Join(branchNames, ", ")))
+	sort.Strings(names)
+	if comp != "" {
+		f.add(e.InstanceLocation, fmt.Sprintf("unknown component %q (catalog components: %s)", comp, strings.Join(names, ", ")))
 		return true
 	}
-	if strings.HasSuffix(branchNames[0], "Message") {
+	if call != "" && !contains(names, "IndexSystemFunction") {
+		// Inside the catalog's own union the branch names are the function names; at the
+		// outer FunctionCall level they are not, so only report from the inner one.
+		f.add(e.InstanceLocation, fmt.Sprintf("unknown function %q (catalog functions: %s)", call, strings.Join(names, ", ")))
+		return true
+	}
+	if strings.HasSuffix(names[0], "Message") {
 		var keys, unknown []string
-		for _, n := range branchNames {
+		for _, n := range names {
 			keys = append(keys, lowerFirst(strings.TrimSuffix(n, "Message")))
 		}
 		for k := range inst {
