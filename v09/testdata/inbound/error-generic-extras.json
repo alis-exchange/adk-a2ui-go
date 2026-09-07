@@ -1,0 +1,3 @@
+{"name":"generic error with extras","version":"v0.9",
+ "message":{"version":"v0.9","error":{"code":"RENDER_FAILED","surfaceId":"s1","message":"could not mount root","detail":{"line":3}}},
+ "wantString":"renderer error RENDER_FAILED on surface \"s1\": could not mount root"}

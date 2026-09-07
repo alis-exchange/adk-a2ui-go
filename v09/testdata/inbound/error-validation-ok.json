@@ -1,0 +1,3 @@
+{"name":"validation error with path","version":"v0.9",
+ "message":{"version":"v0.9","error":{"code":"VALIDATION_FAILED","surfaceId":"s1","path":"/components/0/text","message":"text must be a string"}},
+ "wantString":"renderer error VALIDATION_FAILED on surface \"s1\" at /components/0/text: text must be a string"}

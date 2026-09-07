@@ -1,0 +1,3 @@
+{"name":"two message keys","version":"v0.9",
+ "message":{"version":"v0.9","action":{"name":"n","surfaceId":"s","sourceComponentId":"c","timestamp":"2026-09-07T10:00:00Z","context":{}},"error":{"code":"X","surfaceId":"s","message":"m"}},
+ "wantPaths":[""],"wantContains":["a message must contain exactly one of \"action\", \"error\""]}

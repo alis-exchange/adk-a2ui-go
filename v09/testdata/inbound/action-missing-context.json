@@ -1,0 +1,3 @@
+{"name":"action missing context","version":"v0.9",
+ "message":{"version":"v0.9","action":{"name":"n","surfaceId":"s","sourceComponentId":"c","timestamp":"2026-09-07T10:00:00Z"}},
+ "wantPaths":["action"],"wantContains":["missing property \"context\""]}

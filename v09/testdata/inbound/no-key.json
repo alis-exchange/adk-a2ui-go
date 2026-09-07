@@ -1,0 +1,2 @@
+{"name":"no message key","version":"v0.9","message":{"version":"v0.9"},
+ "wantPaths":[""],"wantContains":["a message must contain exactly one of \"action\", \"error\""]}

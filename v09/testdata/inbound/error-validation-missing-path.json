@@ -1,0 +1,3 @@
+{"name":"validation error without path","version":"v0.9",
+ "message":{"version":"v0.9","error":{"code":"VALIDATION_FAILED","surfaceId":"s1","message":"m"}},
+ "wantPaths":["error"],"wantContains":["missing property \"path\""]}

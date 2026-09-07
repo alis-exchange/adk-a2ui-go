@@ -1,0 +1,3 @@
+{"name":"wrong version","version":"v0.9.1",
+ "message":{"version":"v1.0","action":{"name":"n","surfaceId":"s","sourceComponentId":"c","timestamp":"2026-09-07T10:00:00Z","context":{}}},
+ "wantPaths":["version"],"wantContains":["must be \"v0.9.1\""]}

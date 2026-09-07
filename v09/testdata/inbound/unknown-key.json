@@ -1,0 +1,2 @@
+{"name":"unknown message key","version":"v0.9","message":{"version":"v0.9","bogus":{}},
+ "wantPaths":[""],"wantContains":["unknown message key \"bogus\""]}

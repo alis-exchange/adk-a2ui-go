@@ -1,0 +1,3 @@
+{"name":"action ok","version":"v0.9",
+ "message":{"version":"v0.9","action":{"name":"submit","surfaceId":"s1","sourceComponentId":"btn","timestamp":"2026-09-07T10:00:00Z","context":{"qty":2,"item":"tea"}}},
+ "wantString":"user action \"submit\" on surface \"s1\" from component \"btn\" with context {\"item\":\"tea\",\"qty\":2}"}
