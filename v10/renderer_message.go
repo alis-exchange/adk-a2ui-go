@@ -27,7 +27,7 @@ type Action struct {
 	SourceComponentID string         `json:"sourceComponentId"`
 	Timestamp         string         `json:"timestamp"` // ISO 8601 as sent; not parsed
 	Context           map[string]any `json:"context"`
-	Extensions        map[string]any `json:"-"` // action.metadata.extensions; nil when absent
+	Extensions        map[string]any `json:"-"` // action.metadata.extensions; nil when absent, decode-only: json.Marshal does not write it back
 }
 
 // CallAgentFunction asks the agent to run a function on the renderer's behalf. The agent
@@ -50,7 +50,10 @@ type FunctionCall struct {
 }
 
 // FunctionResponse is the result of a call in either direction. Exactly one of Value and
-// Error is set; Value may be nil (JSON null) when it is the one set.
+// Error is set; Value may be nil (JSON null) when it is the one set. This type is for decoding
+// only: Value has no omitzero, so marshalling a FunctionResponse directly would write Value
+// beside Error even when Error is the one set. Build outbound messages with
+// [NewAgentFunctionResponse] and [NewAgentFunctionError] instead.
 type FunctionResponse struct {
 	FunctionCallID string         `json:"functionCallId"`
 	Value          any            `json:"value"`

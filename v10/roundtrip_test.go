@@ -100,8 +100,8 @@ func TestRoundTripOfficialFunctionCalls(t *testing.T) {
 			}
 		}
 	}
-	if total < 20 {
-		t.Fatalf("found only %d function calls across the examples; the walker or the examples are broken", total)
+	if total < 50 {
+		t.Fatalf("found only %d function calls across the examples (62 today); the walker or the examples are broken", total)
 	}
 	t.Logf("round-tripped %d function calls", total)
 }

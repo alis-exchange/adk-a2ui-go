@@ -10,7 +10,7 @@ Transport-agnostic Go library for the **[A2UI](https://a2ui.org/)** (Agent-to-UI
 - **Official-schema validation.** The upstream JSON schemas and basic catalogs are embedded verbatim (`spec/`, pinned to an upstream commit in `spec/SOURCE`). Every generated message is validated against them **and against the negotiated catalog**, so a missing required property or a misspelled prop is caught before it reaches the renderer.
 - **Catalog resolution.** Catalogs come from the client's inline catalogs, from catalogs you register, or from the built-in basic catalog. Unknown catalogs fall back to envelope checks unless you opt into strict mode. The library never fetches over the network.
 - **Model-friendly errors.** Validation failures come back as a `*kit.ValidationError`: a short problem list with JSON paths, rendered as the tool error the model fixes and retries. Anything else the tools return is labelled an agent-side configuration error, so the model does not retry a payload that was never the problem.
-- **Renderer messages decoded and checked.** `v10.DecodeRendererMessage` (and `v09.DecodeClientMessage`) validate what the renderer sends back (`action`, `callAgentFunction`, `rendererFunctionResponse`, `error`) against the same official schemas and catalogs, and hand you typed structs with one-line `String()` renderings to feed the model. A `v10.FunctionDispatcher` answers `callAgentFunction` with a ready `agentFunctionResponse`.
+- **Renderer messages decoded and checked.** `v10.DecodeRendererMessage` validates what the renderer sends back (`action`, `callAgentFunction`, `rendererFunctionResponse`, `error`) against the same official schemas and catalogs, and hands you typed structs with one-line `String()` renderings to feed the model; `v09.DecodeClientMessage` does the same for v0.9's `action` and `error`. A `v10.FunctionDispatcher` answers `callAgentFunction` with a ready `agentFunctionResponse`.
 
 ## Installation
 
@@ -73,15 +73,15 @@ params := kit.AgentCapabilities(kit.V10, []string{v10.CatalogIDBasic}, true)
 
 ## Packages
 
-| Import path                        | Role                                                          |
-| ----------------------------------- | -------------------------------------------------------------- |
-| `go.alis.build/adk/a2ui`           | `NewToolset` with version negotiation and options.            |
-| `go.alis.build/adk/a2ui/kit`       | Capabilities, `Negotiate`, catalog resolvers, options.        |
-| `go.alis.build/adk/a2ui/spec`      | Embedded upstream schemas and basic catalogs.                 |
+| Import path                        | Role                                                                              |
+| ---------------------------------- | --------------------------------------------------------------------------------- |
+| `go.alis.build/adk/a2ui`           | `NewToolset` with version negotiation and options.                                |
+| `go.alis.build/adk/a2ui/kit`       | Capabilities, `Negotiate`, catalog resolvers, options.                            |
+| `go.alis.build/adk/a2ui/spec`      | Embedded upstream schemas and basic catalogs.                                     |
 | `go.alis.build/adk/a2ui/v09`       | `Validate`, `DecodeClientMessage(s)` for v0.9 and v0.9.1 (framework-independent). |
-| `go.alis.build/adk/a2ui/v09/tools` | ADK tools for v0.9 and v0.9.1.                                |
-| `go.alis.build/adk/a2ui/v10`       | `Validate`, `DecodeRendererMessage(s)`, `FunctionDispatcher` for v1.0.           |
-| `go.alis.build/adk/a2ui/v10/tools` | ADK tools for v1.0.                                           |
+| `go.alis.build/adk/a2ui/v09/tools` | ADK tools for v0.9 and v0.9.1.                                                    |
+| `go.alis.build/adk/a2ui/v10`       | `Validate`, `DecodeRendererMessage(s)`, `FunctionDispatcher` for v1.0.            |
+| `go.alis.build/adk/a2ui/v10/tools` | ADK tools for v1.0.                                                               |
 
 ## How a turn flows
 

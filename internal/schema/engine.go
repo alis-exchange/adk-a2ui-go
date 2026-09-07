@@ -124,8 +124,8 @@ func (e *Engine) compile(key, loc string, resource map[string]any, opts CompileO
 	if s, ok := e.lookup(key); ok {
 		return s, nil
 	}
-	// ... existing compiler setup and c.Compile(loc) unchanged; compilation runs outside the
-	// lock because it is slow and pure.
+	// Compile outside the lock: it is slow and pure, and store reconciles a concurrent compile
+	// of the same key.
 	c := jsonschema.NewCompiler()
 	c.UseLoader(&loader{major: e.major, catalog: opts.Catalog, v091: opts.V091})
 	c.UseRegexpEngine(goRegexp)

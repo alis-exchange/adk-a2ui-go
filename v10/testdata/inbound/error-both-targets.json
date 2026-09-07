@@ -1,3 +1,3 @@
 {"name":"generic error with surfaceId and functionCallId","version":"v1.0",
  "message":{"version":"v1.0","error":{"code":"X","surfaceId":"s1","functionCallId":"fc-9","message":"m"}},
- "wantPaths":["error"],"wantContains":["error"]}
+ "wantPaths":["error","error.code"],"wantContains":["missing property \"path\"","unknown properties \"functionCallId\""]}

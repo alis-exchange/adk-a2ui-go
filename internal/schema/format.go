@@ -19,7 +19,8 @@ var printer = message.NewPrinter(language.English)
 // Format turns a validator error into model-facing problems. instance is the value that was
 // validated and prefix is its rendered path ("messages", or "messages[1].updateComponents.components[0]"
 // for a single component). oneOf fan-outs are pruned to the branch matching the instance's
-// "component" (catalog components) or present message key (envelopes).
+// "component" (catalog components), present message key (envelopes), or "call" (catalog
+// functions).
 //
 // One call reports everything it finds; deduplication, ordering and the length cap belong to
 // [Finalize], which sees every pass's problems and is the only place that can cap the whole list.
