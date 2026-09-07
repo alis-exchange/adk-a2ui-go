@@ -5,6 +5,8 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/santhosh-tekuri/jsonschema/v6"
+	"github.com/santhosh-tekuri/jsonschema/v6/kind"
 	"go.alis.build/adk/a2ui/spec"
 )
 
@@ -50,6 +52,8 @@ func TestFormatGolden(t *testing.T) {
 			[]Problem{{"messages[0]", `unknown message key "makeSurface"; a message must contain exactly one of "createSurface", "deleteSurface", "updateComponents", "updateDataModel"`}}},
 		{"wrong version", `[{"version":"v1.0","createSurface":{"surfaceId":"s","catalogId":"x"}}]`,
 			[]Problem{{"messages[0].version", `must be "v0.9"`}}},
+		{"unknown properties sorted", `[{"version":"v0.9","createSurface":{"surfaceId":"s","catalogId":"` + basicV09 + `","zzz":1,"aaa":2,"mmm":3}}]`,
+			[]Problem{{"messages[0].createSurface", `unknown properties "aaa", "mmm", "zzz"`}}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -58,5 +62,25 @@ func TestFormatGolden(t *testing.T) {
 				t.Errorf("\n got: %+v\nwant: %+v", got, tc.want)
 			}
 		})
+	}
+}
+
+// TestFormatEmptyOneOfCausesDoesNotPanic covers an ambiguous oneOf (more than one subschema
+// matched) where the validator reports *kind.OneOf with nil Causes. walkOneOf must not index
+// branchNames[0] when no Reference-shaped causes were collected, and must instead let the
+// generic walk fall back to the OneOf kind's own LocalizedString.
+func TestFormatEmptyOneOfCausesDoesNotPanic(t *testing.T) {
+	ve := &jsonschema.ValidationError{
+		InstanceLocation: []string{"foo"},
+		ErrorKind:        &kind.OneOf{Subschemas: []int{0, 1}},
+		Causes:           nil,
+	}
+	instance := map[string]any{"foo": map[string]any{"bar": 1.0}}
+	got := Format(ve, instance, "root")
+	if len(got) != 1 {
+		t.Fatalf("expected exactly one Problem, got %d: %+v", len(got), got)
+	}
+	if got[0].Path != "root.foo" {
+		t.Errorf("got Path %q, want %q", got[0].Path, "root.foo")
 	}
 }

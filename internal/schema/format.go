@@ -64,7 +64,9 @@ func (f *formatter) walk(e *jsonschema.ValidationError) {
 			return
 		}
 	case *kind.AdditionalProperties:
-		f.add(e.InstanceLocation, "unknown properties "+quoteList(k.Properties))
+		props := append([]string(nil), k.Properties...)
+		sort.Strings(props)
+		f.add(e.InstanceLocation, "unknown properties "+quoteList(props))
 		return
 	case *kind.Const:
 		f.add(e.InstanceLocation, "must be "+jsonText(k.Want))
@@ -144,6 +146,11 @@ func (f *formatter) walkOneOf(e *jsonschema.ValidationError) bool {
 				return true
 			}
 		}
+	}
+	if len(branchNames) == 0 {
+		// No Reference-shaped causes to pick a branch from (e.g. an ambiguous oneOf with nil
+		// Causes). Let the caller fall back to walking generically.
+		return false
 	}
 	sort.Strings(branchNames)
 	if comp, _ := inst["component"].(string); comp != "" {
