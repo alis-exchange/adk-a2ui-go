@@ -83,23 +83,27 @@ func TestGenerateTool(t *testing.T) {
 		t.Errorf("catalog violation not reported: %v", err)
 	}
 
-	// ADK pre-validates arguments against InputSchema before the handler runs. v1.0 has only one
-	// wire version, so the "version" property carries a Const of "v1.0": a wrong version fails
-	// that pre-validation and never reaches v10.Validate, so only assert that the call errors.
+	// The envelope describes rather than enforces, so ADK's pre-validation of the raw arguments
+	// lets these through and v10.Validate reports them with its own curated, path-carrying text.
 	wrongVersion := []any{
 		map[string]any{"version": "v0.9", "createSurface": map[string]any{"surfaceId": "s", "catalogId": v10.CatalogIDBasic}},
 	}
-	if _, err := tl.(runnable).Run(ctx, map[string]any{"messages": wrongVersion}); err == nil {
-		t.Error("wrong version must be rejected")
+	if _, err := tl.(runnable).Run(ctx, map[string]any{"messages": wrongVersion}); err == nil || !strings.Contains(err.Error(), `must be "v1.0"`) {
+		t.Errorf("wrong version not reported: %v", err)
 	}
 
-	// updateDataModel requires "value" in the InputSchema too, so a batch lacking it likewise
-	// fails ADK's own pre-validation before the handler runs; only assert that the call errors.
 	missingValue := []any{
 		map[string]any{"version": "v1.0", "updateDataModel": map[string]any{"surfaceId": "s"}},
 	}
-	if _, err := tl.(runnable).Run(ctx, map[string]any{"messages": missingValue}); err == nil {
-		t.Error("updateDataModel without value must be rejected")
+	if _, err := tl.(runnable).Run(ctx, map[string]any{"messages": missingValue}); err == nil || !strings.Contains(err.Error(), `missing property "value"`) {
+		t.Errorf("updateDataModel without value not reported: %v", err)
+	}
+
+	unknownKey := []any{
+		map[string]any{"version": "v1.0", "makeSurface": map[string]any{"surfaceId": "s"}},
+	}
+	if _, err := tl.(runnable).Run(ctx, map[string]any{"messages": unknownKey}); err == nil || !strings.Contains(err.Error(), `unknown message key "makeSurface"`) {
+		t.Errorf("unknown message key not reported: %v", err)
 	}
 }
 

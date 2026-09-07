@@ -2,6 +2,8 @@ package toolkit
 
 import (
 	"encoding/json"
+	"errors"
+	"fmt"
 	"strings"
 
 	"github.com/google/jsonschema-go/jsonschema"
@@ -12,6 +14,13 @@ import (
 	"go.alis.build/adk/a2ui/internal/schema"
 	"go.alis.build/adk/a2ui/kit"
 )
+
+// configErr labels a failure the model cannot fix. Tool errors are handed to the model as text,
+// so a broken resolver or an unusable catalog would otherwise read like a malformed batch and
+// send the model into a retry loop over a payload that was never the problem.
+func configErr(err error) error {
+	return fmt.Errorf("a2ui: agent-side configuration error, do not retry: %w", err)
+}
 
 // Tools returns [catalog tool, generate tool] for one negotiated version.
 func Tools(s Spec, params kit.VersionParams, opts kit.ToolOptions) ([]tool.Tool, error) {
@@ -48,7 +57,9 @@ func CatalogTool(s Spec, params kit.VersionParams, opts kit.ToolOptions) (tool.T
 		for _, id := range out.CatalogIDs {
 			cat, ok, err := schema.ResolveCatalog(ctx, s.Major, id, vopts)
 			if err != nil {
-				return nil, err
+				// A resolver that fails is the agent's problem, not the model's: an id it cannot
+				// resolve is reported as "unresolved" instead.
+				return nil, configErr(err)
 			}
 			if !ok {
 				out.Unresolved = append(out.Unresolved, id)
@@ -56,7 +67,7 @@ func CatalogTool(s Spec, params kit.VersionParams, opts kit.ToolOptions) (tool.T
 			}
 			b, err := json.Marshal(cat)
 			if err != nil {
-				return nil, err
+				return nil, configErr(err)
 			}
 			out.Catalogs[id] = string(b)
 			if ins := schema.CatalogInstructions(s.Major, cat); ins != "" {
@@ -79,8 +90,16 @@ func CatalogTool(s Spec, params kit.VersionParams, opts kit.ToolOptions) (tool.T
 func GenerateTool(s Spec, params kit.VersionParams, opts kit.ToolOptions) (tool.Tool, error) {
 	vopts := kit.ValidateOptions{Version: s.Version, Params: params, Resolver: opts.Resolver, Strict: opts.Strict}
 	handler := func(ctx agent.Context, in *GenerateInput) (*GenerateOutput, error) {
+		if len(in.Messages) == 0 {
+			// An empty batch is a model mistake with a one-line fix, not a schema failure.
+			return nil, &kit.ValidationError{Problems: []kit.Problem{{Path: "messages", Message: "must contain at least one message"}}}
+		}
 		if err := s.Validate(ctx, in.Messages, vopts); err != nil {
-			return nil, err
+			var ve *kit.ValidationError
+			if errors.As(err, &ve) {
+				return nil, err
+			}
+			return nil, configErr(err)
 		}
 		return &GenerateOutput{Status: "success", IsValid: true, Messages: in.Messages}, nil
 	}

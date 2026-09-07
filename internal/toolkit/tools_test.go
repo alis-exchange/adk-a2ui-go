@@ -70,11 +70,8 @@ func TestCatalogToolResolvesEmbeddedInlineAndUnknown(t *testing.T) {
 
 func TestGenerateToolPassesOptionsAndEchoes(t *testing.T) {
 	var got kit.ValidateOptions
-	validate := func(_ context.Context, msgs []map[string]any, opts kit.ValidateOptions) error {
+	validate := func(_ context.Context, _ []map[string]any, opts kit.ValidateOptions) error {
 		got = opts
-		if len(msgs) == 0 {
-			return errors.New("empty")
-		}
 		return nil
 	}
 	reg := kit.NewRegistry()
@@ -97,7 +94,82 @@ func TestGenerateToolPassesOptionsAndEchoes(t *testing.T) {
 	if got.Version != "v0.9" || !got.Strict || got.Resolver != reg || got.Params.SupportedCatalogIDs[0] != "acme:ui" {
 		t.Errorf("options not forwarded: %+v", got)
 	}
-	if _, err := tl.(runnable).Run(ctx, map[string]any{"messages": []any{}}); err == nil {
-		t.Error("validation error must surface as tool error")
+}
+
+// TestGenerateToolRejectsEmptyBatch covers the check that runs before Validate: an empty array
+// is a model mistake, so it comes back as a *kit.ValidationError naming the fix.
+func TestGenerateToolRejectsEmptyBatch(t *testing.T) {
+	called := false
+	validate := func(context.Context, []map[string]any, kit.ValidateOptions) error {
+		called = true
+		return nil
+	}
+	tl, err := GenerateTool(testSpec(validate), kit.VersionParams{}, kit.ToolOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx := &fakeContext{agent.NewStrictContextMock(context.Background())}
+	_, err = tl.(runnable).Run(ctx, map[string]any{"messages": []any{}})
+	var ve *kit.ValidationError
+	if !errors.As(err, &ve) {
+		t.Fatalf("want *kit.ValidationError, got %v", err)
+	}
+	if len(ve.Problems) != 1 || ve.Problems[0].Path != "messages" || ve.Problems[0].Message != "must contain at least one message" {
+		t.Errorf("Problems = %+v", ve.Problems)
+	}
+	if called {
+		t.Error("Validate must not be called for an empty batch")
+	}
+}
+
+// TestGenerateToolSeparatesModelAndAgentErrors covers the split the model sees: a
+// *kit.ValidationError is passed through verbatim so the model can fix and retry, while any
+// other failure is labelled as the agent's, so the model does not retry a good payload.
+func TestGenerateToolSeparatesModelAndAgentErrors(t *testing.T) {
+	msgs := map[string]any{"messages": []any{map[string]any{"version": "v0.9"}}}
+	ctx := &fakeContext{agent.NewStrictContextMock(context.Background())}
+
+	plain := func(context.Context, []map[string]any, kit.ValidateOptions) error {
+		return errors.New("schema: compile https://example.com/x.json: boom")
+	}
+	tl, err := GenerateTool(testSpec(plain), kit.VersionParams{}, kit.ToolOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = tl.(runnable).Run(ctx, msgs)
+	if err == nil || !strings.HasPrefix(err.Error(), "a2ui: agent-side configuration error") {
+		t.Errorf("plain error = %v, want the agent-side prefix", err)
+	}
+	if err == nil || !strings.Contains(err.Error(), "boom") {
+		t.Errorf("wrapped error must keep the cause: %v", err)
+	}
+
+	ve := &kit.ValidationError{Problems: []kit.Problem{{Path: "messages[0]", Message: `missing property "createSurface"`}}}
+	tl, err = GenerateTool(testSpec(func(context.Context, []map[string]any, kit.ValidateOptions) error { return ve }), kit.VersionParams{}, kit.ToolOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = tl.(runnable).Run(ctx, msgs)
+	if err == nil || err.Error() != ve.Error() {
+		t.Errorf("validation error = %v, want it unchanged:\n%s", err, ve.Error())
+	}
+}
+
+// failingResolver stands in for a consumer resolver that is broken (a database down, say).
+type failingResolver struct{}
+
+func (failingResolver) ResolveCatalog(context.Context, string) (map[string]any, bool, error) {
+	return nil, false, errors.New("registry unavailable")
+}
+
+func TestCatalogToolLabelsResolverFailure(t *testing.T) {
+	params := kit.VersionParams{SupportedCatalogIDs: []string{"acme:ui"}}
+	tl, err := CatalogTool(testSpec(nil), params, kit.ToolOptions{Resolver: failingResolver{}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = tl.(runnable).Run(&fakeContext{agent.NewStrictContextMock(context.Background())}, map[string]any{})
+	if err == nil || !strings.HasPrefix(err.Error(), "a2ui: agent-side configuration error") {
+		t.Errorf("resolver failure = %v, want the agent-side prefix", err)
 	}
 }

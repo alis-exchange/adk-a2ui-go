@@ -84,6 +84,13 @@ func TestGenerateTool(t *testing.T) {
 	if _, err := tl.(runnable).Run(ctx, map[string]any{"messages": messages("v0.9", "")}); err == nil || !strings.Contains(err.Error(), `must be "v0.9.1"`) {
 		t.Errorf("wrong version not reported: %v", err)
 	}
+
+	// The envelope describes rather than enforces, so an unknown message key passes ADK's
+	// pre-validation of the raw arguments and reaches v09.Validate, which names it.
+	unknownKey := []any{map[string]any{"version": "v0.9.1", "makeSurface": map[string]any{"surfaceId": "s"}}}
+	if _, err := tl.(runnable).Run(ctx, map[string]any{"messages": unknownKey}); err == nil || !strings.Contains(err.Error(), `unknown message key "makeSurface"`) {
+		t.Errorf("unknown message key not reported: %v", err)
+	}
 }
 
 func TestCatalogTool(t *testing.T) {
