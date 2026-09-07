@@ -24,62 +24,65 @@ const (
 // toolDescription is the human-readable instruction block shown to the model. It summarizes valid
 // message shapes, emphasizes the required "root" component id, and includes minimal JSON examples.
 var toolDescription = `
-Validates an array of A2UI messages against the A2UI schema. Use this tool when showing components, forms, or custom UI surfaces.
+Renders interactive UI in the chat by sending validated A2UI v0.9 server-to-client messages to the client. This is the ONLY way to display structured UI (forms, cards, dashboards, buttons, etc.) — do not describe UI in plain text when this tool is available.
 
-**CRITICAL RENDERING RULES:**
-- For every surfaceId created, at least one component in updateComponents.components MUST have "id": "root".
-- The chat renderer mounts <ComponentNode id="root" />; without root the UI will not render.
+WHEN TO USE:
+- User asks to show, build, display, or update a UI, form, widget, or visual layout.
+- You need to create a new surface, change components, update bound data, or remove a surface.
 
-**Example (minimal valid):**
+WHEN NOT TO USE:
+- A text-only answer is sufficient.
+- You have not called a2ui_catalog yet (you need component names, props, and a valid catalogId).
+- A previous call returned status "success" for the same UI task (your work is done).
+
+WORKFLOW:
+1. Call a2ui_catalog to get catalog_urls and inline_catalogs.
+2. Pick a catalogId from that response for createSurface.catalogId.
+3. Call this tool with a messages array. On success (status "success", is_valid true), stop — do not call again.
+
+MESSAGE TYPES (exactly one per message object):
+- createSurface — register a new UI surface (requires surfaceId + catalogId).
+- updateComponents — set/replace the component tree (requires surfaceId + components).
+- updateDataModel — update reactive data at path (requires surfaceId).
+- deleteSurface — remove a surface (requires surfaceId).
+
+Every message MUST include "version": "v0.9".
+
+NEW SURFACE (send together in one call):
+1. createSurface for the surfaceId and catalogId.
+2. updateComponents for the same surfaceId with a component tree that includes id "root".
+
+CRITICAL: The client mounts <ComponentNode id="root" />. Every surface created in this batch MUST have a component with "id": "root" in its updateComponents — without it, nothing renders.
+
+UPDATING EXISTING UI:
+- Rebuild layout → updateComponents (still needs id "root" if replacing the tree).
+- Change bound values only → updateDataModel.
+- Remove UI → deleteSurface.
+
+ON ERROR: Fix the reported validation issue and retry. Do not abandon the UI or duplicate the surface unless intended.
+
+Example (new surface, minimal):
 {
   "messages": [
     {
       "version": "v0.9",
       "createSurface": {
-        "surfaceId": "my-surface",
-        "catalogId": "https://raw.githubusercontent.com/alis-exchange/a2ui-vuetify-renderer/main/catalog/vuetify-catalog.json"
+        "surfaceId": "registration-form",
+        "catalogId": "<catalogId from a2ui_catalog>"
       }
     },
     {
       "version": "v0.9",
       "updateComponents": {
-        "surfaceId": "my-surface",
+        "surfaceId": "registration-form",
         "components": [
-          { "component": "Card", "id": "root", "child": "text-1" },
-          { "component": "Text", "id": "text-1", "text": "Hello" }
+          { "component": "Card", "id": "root", "child": "title-1" },
+          { "component": "Text", "id": "title-1", "text": "Sign up" }
         ]
       }
     }
   ]
 }
-
-**Example (updateDataModel):**
-{
-  "messages": [
-    {
-      "version": "v0.9",
-      "updateDataModel": {
-        "surfaceId": "my-surface",
-        "path": "/user/name",
-        "value": "John Doe"
-      }
-    }
-  ]
-}
-
-**Example (deleteSurface):**
-{
-  "messages": [
-    {
-      "version": "v0.9",
-      "deleteSurface": {
-        "surfaceId": "my-surface"
-      }
-    }
-  ]
-}
-
-You MUST use the exact keys "createSurface", "updateComponents", "updateDataModel", or "deleteSurface".
 `
 
 // GenerateA2UIToolInput is the JSON argument shape for [GenerateA2UIMessages].
@@ -140,7 +143,7 @@ func (o *GenerateA2UIToolOutput) JSONSchema() *jsonschema.Schema {
 // args.Messages against the resolved JSON Schema, then applies extra semantic checks (root
 // component per surface). Validation errors are returned as tool errors so the model can self-correct.
 func GenerateA2UIMessages() (tool.Tool, error) {
-	handler := func(ctx tool.Context, args *GenerateA2UIToolInput) (*GenerateA2UIToolOutput, error) {
+	handler := func(ctx agent.ToolContext, args *GenerateA2UIToolInput) (*GenerateA2UIToolOutput, error) {
 		rs, err := A2UiServerToClientListSchema.Resolve(nil)
 		if err != nil {
 			return nil, fmt.Errorf("failed to resolve A2UI schema: %v", err)
@@ -270,7 +273,7 @@ func (o *A2UICatalogToolOutput) JSONSchema() *jsonschema.Schema {
 // no capabilities are present (for example before negotiation), the handler returns empty slices
 // without error so the model can still call the tool safely.
 func A2UICatalogTool() (tool.Tool, error) {
-	handler := func(ctx tool.Context, input *A2UICatalogToolInput) (*A2UICatalogToolOutput, error) {
+	handler := func(ctx agent.ToolContext, input *A2UICatalogToolInput) (*A2UICatalogToolOutput, error) {
 		a2uiCapabilities, ok := kit.CapabilitiesFromContext(ctx)
 		if !ok {
 			// No negotiated A2UI params on this turn; empty output is valid.
@@ -356,4 +359,3 @@ func (t *a2uiToolset) Name() string {
 func (t *a2uiToolset) Tools(_ agent.ReadonlyContext) ([]tool.Tool, error) {
 	return t.tools, nil
 }
-
