@@ -1,0 +1,4 @@
+{"name":"invalid theme color","version":"v0.9","strict":true,
+ "messages":[{"version":"v0.9","createSurface":{"surfaceId":"s","catalogId":"https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json","theme":{"primaryColor":"red"}}},
+             {"version":"v0.9","updateComponents":{"surfaceId":"s","components":[{"id":"root","component":"Text","text":"hi"}]}}],
+ "wantPaths":["messages[0].createSurface.theme.primaryColor"],"wantContains":["does not match pattern"]}

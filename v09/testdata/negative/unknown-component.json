@@ -1,0 +1,4 @@
+{"name":"unknown component","version":"v0.9","strict":true,
+ "messages":[{"version":"v0.9","createSurface":{"surfaceId":"s","catalogId":"https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json"}},
+             {"version":"v0.9","updateComponents":{"surfaceId":"s","components":[{"id":"root","component":"Sparkle"}]}}],
+ "wantPaths":["messages[1].updateComponents.components[0]"],"wantContains":["unknown component \"Sparkle\""]}

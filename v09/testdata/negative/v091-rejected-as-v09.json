@@ -1,0 +1,4 @@
+{"name":"v0.9.1 rejected as v0.9","version":"v0.9","strict":true,
+ "messages":[{"version":"v0.9.1","createSurface":{"surfaceId":"s","catalogId":"https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json"}},
+             {"version":"v0.9.1","updateComponents":{"surfaceId":"s","components":[{"id":"root","component":"Text","text":"hi"}]}}],
+ "wantPaths":["messages[0].version"],"wantContains":["must be \"v0.9\""]}

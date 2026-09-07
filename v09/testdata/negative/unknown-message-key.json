@@ -1,0 +1,3 @@
+{"name":"unknown message key","version":"v0.9","strict":false,
+ "messages":[{"version":"v0.9","makeSurface":{"surfaceId":"s"}}],
+ "wantPaths":["messages[0]"],"wantContains":["unknown message key \"makeSurface\""]}

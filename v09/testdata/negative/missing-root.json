@@ -1,0 +1,4 @@
+{"name":"missing root component","version":"v0.9","strict":true,
+ "messages":[{"version":"v0.9","createSurface":{"surfaceId":"s","catalogId":"https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json"}},
+             {"version":"v0.9","updateComponents":{"surfaceId":"s","components":[{"id":"card","component":"Text","text":"hi"}]}}],
+ "wantPaths":["messages[0].createSurface"],"wantContains":["no component with id \"root\""]}
