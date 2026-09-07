@@ -159,3 +159,24 @@ func TestStrictReportsMissingCatalogOnce(t *testing.T) {
 		t.Errorf("path = %q, want %q", p.Path, "messages[0].createSurface.catalogId")
 	}
 }
+
+// TestValidationErrorIsPublic proves a consumer can match a Validate failure without importing
+// an internal package: the error a validator returns is a *kit.ValidationError, and its problem
+// list is reachable through errors.As.
+func TestValidationErrorIsPublic(t *testing.T) {
+	msgs := []map[string]any{{"version": "v0.9", "deleteSurface": map[string]any{"surfaceId": "s"}}}
+	err := Validate(context.Background(), msgs, kit.ValidateOptions{Version: kit.V10})
+	var ve *kit.ValidationError
+	if !errors.As(err, &ve) {
+		t.Fatalf("want *kit.ValidationError, got %#v", err)
+	}
+	if len(ve.Problems) == 0 {
+		t.Fatal("Problems is empty")
+	}
+	if ve.Problems[0].Path != "messages[0].version" || !strings.Contains(ve.Problems[0].Message, `must be "v1.0"`) {
+		t.Errorf("Problems[0] = %+v", ve.Problems[0])
+	}
+	if !strings.Contains(err.Error(), "validation failed. Fix the following and call the tool again:") {
+		t.Errorf("Error() = %q", err.Error())
+	}
+}

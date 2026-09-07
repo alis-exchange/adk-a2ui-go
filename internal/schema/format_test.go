@@ -41,19 +41,19 @@ func TestFormatGolden(t *testing.T) {
 		want []Problem
 	}{
 		{"unknown property", wrap(`{"id":"root","component":"Text","text":"hi","colour":"red"}`),
-			[]Problem{{comp, `unknown property "colour"`}}},
+			[]Problem{{Path: comp, Message: `unknown property "colour"`}}},
 		{"missing required", wrap(`{"id":"root","component":"Text"}`),
-			[]Problem{{comp, `missing property "text"`}}},
+			[]Problem{{Path: comp, Message: `missing property "text"`}}},
 		{"bad enum", wrap(`{"id":"root","component":"Text","text":"hi","variant":"huge"}`),
-			[]Problem{{comp + ".variant", `must be one of "h1", "h2", "h3", "h4", "h5", "caption", "body"`}}},
+			[]Problem{{Path: comp + ".variant", Message: `must be one of "h1", "h2", "h3", "h4", "h5", "caption", "body"`}}},
 		{"unknown component", wrap(`{"id":"root","component":"Sparkle"}`),
-			[]Problem{{comp, `unknown component "Sparkle" (catalog components: AudioPlayer, Button, Card, CheckBox, ChoicePicker, Column, DateTimeInput, Divider, Icon, Image, List, Modal, Row, Slider, Tabs, Text, TextField, Video)`}}},
+			[]Problem{{Path: comp, Message: `unknown component "Sparkle" (catalog components: AudioPlayer, Button, Card, CheckBox, ChoicePicker, Column, DateTimeInput, Divider, Icon, Image, List, Modal, Row, Slider, Tabs, Text, TextField, Video)`}}},
 		{"unknown message key", `[{"version":"v0.9","makeSurface":{"surfaceId":"s"}}]`,
-			[]Problem{{"messages[0]", `unknown message key "makeSurface"; a message must contain exactly one of "createSurface", "deleteSurface", "updateComponents", "updateDataModel"`}}},
+			[]Problem{{Path: "messages[0]", Message: `unknown message key "makeSurface"; a message must contain exactly one of "createSurface", "deleteSurface", "updateComponents", "updateDataModel"`}}},
 		{"wrong version", `[{"version":"v1.0","createSurface":{"surfaceId":"s","catalogId":"x"}}]`,
-			[]Problem{{"messages[0].version", `must be "v0.9"`}}},
+			[]Problem{{Path: "messages[0].version", Message: `must be "v0.9"`}}},
 		{"unknown properties sorted", `[{"version":"v0.9","createSurface":{"surfaceId":"s","catalogId":"` + basicV09 + `","zzz":1,"aaa":2,"mmm":3}}]`,
-			[]Problem{{"messages[0].createSurface", `unknown properties "aaa", "mmm", "zzz"`}}},
+			[]Problem{{Path: "messages[0].createSurface", Message: `unknown properties "aaa", "mmm", "zzz"`}}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

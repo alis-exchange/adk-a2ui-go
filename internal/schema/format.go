@@ -14,14 +14,15 @@ import (
 	"golang.org/x/text/message"
 )
 
-const maxProblems = 20
-
 var printer = message.NewPrinter(language.English)
 
 // Format turns a validator error into model-facing problems. instance is the value that was
 // validated and prefix is its rendered path ("messages", or "messages[1].updateComponents.components[0]"
 // for a single component). oneOf fan-outs are pruned to the branch matching the instance's
 // "component" (catalog components) or present message key (envelopes).
+//
+// One call reports everything it finds; deduplication, ordering and the length cap belong to
+// [Finalize], which sees every pass's problems and is the only place that can cap the whole list.
 func Format(err error, instance any, prefix string) []Problem {
 	ve, ok := err.(*jsonschema.ValidationError)
 	if !ok {
@@ -31,10 +32,6 @@ func Format(err error, instance any, prefix string) []Problem {
 	f.walk(ve)
 	if len(f.problems) == 0 {
 		f.problems = []Problem{{Path: prefix, Message: strings.SplitN(ve.Error(), "\n", 2)[0]}}
-	}
-	if len(f.problems) > maxProblems {
-		extra := len(f.problems) - maxProblems
-		f.problems = append(f.problems[:maxProblems], Problem{Message: fmt.Sprintf("... and %d more", extra)})
 	}
 	return f.problems
 }
@@ -76,6 +73,15 @@ func (f *formatter) walk(e *jsonschema.ValidationError) {
 		return
 	case *kind.Type:
 		f.add(e.InstanceLocation, fmt.Sprintf("must be of type %s, got %s", strings.Join(k.Want, " or "), k.Got))
+		return
+	case *kind.Not:
+		// "not" says only that the value is forbidden, never why, so name the value itself: the
+		// spec uses it for blocklists such as v1.0's component name "Surface".
+		if v, ok := f.valueAt(e.InstanceLocation); ok {
+			f.add(e.InstanceLocation, "must not be "+jsonText(v))
+		} else {
+			f.add(e.InstanceLocation, "is not allowed")
+		}
 		return
 	}
 	if len(e.Causes) == 0 {
@@ -124,7 +130,8 @@ func pruneCollateralFalseSchema(causes []*jsonschema.ValidationError) []*jsonsch
 // walkOneOf selects the branch that matches the instance. Returns false when no selection
 // strategy applies, so the caller falls back to walking every cause.
 func (f *formatter) walkOneOf(e *jsonschema.ValidationError) bool {
-	inst, ok := f.valueAt(e.InstanceLocation).(map[string]any)
+	v, _ := f.valueAt(e.InstanceLocation)
+	inst, ok := v.(map[string]any)
 	if !ok {
 		return false
 	}
@@ -188,23 +195,29 @@ func (f *formatter) add(loc []string, msg string) {
 	f.problems = append(f.problems, p)
 }
 
-func (f *formatter) valueAt(loc []string) any {
+// valueAt returns the instance value at loc and whether it could be reached. ok is false when
+// the path runs off the end of the instance, which is distinct from reaching a real JSON null.
+func (f *formatter) valueAt(loc []string) (any, bool) {
 	cur := f.instance
 	for _, seg := range loc {
 		switch v := cur.(type) {
 		case map[string]any:
-			cur = v[seg]
+			next, present := v[seg]
+			if !present {
+				return nil, false
+			}
+			cur = next
 		case []any:
 			i, err := strconv.Atoi(seg)
 			if err != nil || i < 0 || i >= len(v) {
-				return nil
+				return nil, false
 			}
 			cur = v[i]
 		default:
-			return nil
+			return nil, false
 		}
 	}
-	return cur
+	return cur, true
 }
 
 func renderPath(prefix string, loc []string) string {
