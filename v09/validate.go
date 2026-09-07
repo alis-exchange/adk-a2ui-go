@@ -74,7 +74,12 @@ func validateAgainstCatalogs(ctx context.Context, eng *schema.Engine, messages [
 		if cs, ok := m["createSurface"].(map[string]any); ok {
 			sid, _ := cs["surfaceId"].(string)
 			cid, _ := cs["catalogId"].(string)
-			surfaceCatalog[sid] = cid
+			// Creating a surface twice in one batch is a semantic rule violation reported
+			// elsewhere; here the first createSurface wins, as it does in v10, so both versions
+			// check the surface's components against the same catalog.
+			if _, dup := surfaceCatalog[sid]; !dup {
+				surfaceCatalog[sid] = cid
+			}
 			if _, seen := catalogAt[cid]; !seen {
 				catalogAt[cid] = i
 			}

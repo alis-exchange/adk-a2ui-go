@@ -6,8 +6,9 @@ import (
 	"go.alis.build/adk/a2ui/internal/schema"
 )
 
-// checkList enforces per-list component rules: ids are non-empty and unique, and at most one
-// component has id "root". It reports how many roots it found so the caller can track whether a
+// checkList enforces per-list component rules: ids are non-empty and unique, which is also what
+// keeps a list to at most one component with id "root". It reports how many roots it found (0 or
+// 1) so the caller can track whether a
 // surface (whose components may be split across createSurface.components and one or more
 // updateComponents.components lists) ends up with a root at all.
 func checkList(comps []any, basePath string) (int, []schema.Problem) {
@@ -22,7 +23,7 @@ func checkList(comps []any, basePath string) (int, []schema.Problem) {
 			continue
 		}
 		if k, dup := seen[id]; dup {
-			out = append(out, schema.Problem{Path: fmt.Sprintf("%s[%d].id", basePath, j), Message: fmt.Sprintf("duplicate component id %q (also used at index %d)", id, k)})
+			out = append(out, schema.Problem{Path: fmt.Sprintf("%s[%d].id", basePath, j), Message: fmt.Sprintf("duplicate component id %q (also used at components[%d])", id, k)})
 			continue
 		}
 		seen[id] = j
@@ -30,15 +31,15 @@ func checkList(comps []any, basePath string) (int, []schema.Problem) {
 			roots++
 		}
 	}
-	if roots > 1 {
-		out = append(out, schema.Problem{Path: basePath, Message: `more than one component has id "root"`})
-	}
+	// roots can only ever be 0 or 1: a second component with id "root" is a duplicate id and was
+	// already reported above.
 	return roots, out
 }
 
 // semanticRules enforces what the spec states in prose rather than schema: surface ids are
-// non-empty and created once per batch, component ids are unique per list with at most one
-// "root" per list, and every surface created in the batch ends up with a root component either
+// non-empty and created once per batch, component ids are unique per list (which is also what
+// keeps a list to at most one "root"), and every surface created in the batch ends up with a
+// root component either
 // in createSurface.components or in a later updateComponents.
 func semanticRules(messages []map[string]any) []schema.Problem {
 	var out []schema.Problem

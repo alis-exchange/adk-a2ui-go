@@ -9,7 +9,7 @@ Transport-agnostic Go library for the **[A2UI](https://a2ui.org/)** (Agent-to-UI
 - **One negotiated toolset.** `a2ui.NewToolset()` reads the client's capabilities each turn, picks the newest A2UI version both sides support (**v1.0**, **v0.9.1**, or **v0.9**), and exposes `a2ui_catalog` and `generate_a2ui_messages` for it.
 - **Official-schema validation.** The upstream JSON schemas and basic catalogs are embedded verbatim (`spec/`, pinned to an upstream commit in `spec/SOURCE`). Every generated message is validated against them **and against the negotiated catalog**, so a missing required property or a misspelled prop is caught before it reaches the renderer.
 - **Catalog resolution.** Catalogs come from the client's inline catalogs, from catalogs you register, or from the built-in basic catalog. Unknown catalogs fall back to envelope checks unless you opt into strict mode. The library never fetches over the network.
-- **Model-friendly errors.** Validation failures are returned as a short problem list with JSON paths, which the model fixes and retries.
+- **Model-friendly errors.** Validation failures come back as a `*kit.ValidationError`: a short problem list with JSON paths, rendered as the tool error the model fixes and retries. Anything else the tools return is labelled an agent-side configuration error, so the model does not retry a payload that was never the problem.
 
 ## Installation
 
@@ -59,6 +59,8 @@ toolset, err := a2ui.NewToolset(
 )
 ```
 
+Strict mode only covers surfaces the batch itself creates. A message that updates a surface created in an earlier turn has no `catalogId` in this batch, so its components are checked against the envelope alone and no "catalog not available" problem is raised — the surface may legitimately pre-exist.
+
 ### Advertise what the agent supports
 
 ```go
@@ -85,7 +87,17 @@ params := kit.AgentCapabilities(kit.V10, []string{v10.CatalogIDBasic}, true)
 1. The transport adapter stores capabilities on the context.
 2. `a2ui.NewToolset` negotiates the version and exposes two tools.
 3. The model calls `a2ui_catalog`, which returns every supported catalog document it can resolve plus authoring instructions.
-4. The model calls `generate_a2ui_messages`. The batch is validated against the official schema (envelope), then each component against its catalog, then the spec's prose rules (one `root` per surface, no duplicate surfaces or ids, v1.0 catalogId fallback). Problems come back as a tool error; success echoes the messages for the transport to forward.
+4. The model calls `generate_a2ui_messages`. The batch is validated against the official schema (envelope), then each component against its catalog, then the spec's prose rules (at least one `root` component per created surface, ids unique within a list, no duplicate surfaces, v1.0 catalogId fallback). Problems come back as a tool error; success echoes the messages for the transport to forward.
+
+## Migrating from v0.x
+
+The `v1` line is a rewrite around version negotiation. What changed for consumers:
+
+- `kit.CapabilitiesFromContext` returns a `kit.Capabilities` (a parsed, version-keyed map), not a raw document.
+- `kit.GetCatalogs` is gone. Read `kit.VersionParams` from `kit.ParseCapabilities` or from `kit.Negotiate` instead.
+- `v09/tools.NewA2UIToolset` is gone. Use `a2ui.NewToolset(...)` for negotiation across versions, or `v09/tools.NewToolset(version, opts)` to pin one version.
+- The catalog tool's output shape is now `{version, catalog_ids, catalogs, unresolved, instructions}`.
+- Validation errors are `*kit.ValidationError`; match them with `errors.As` and read `.Problems`.
 
 ## Updating the embedded spec
 

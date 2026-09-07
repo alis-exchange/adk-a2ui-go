@@ -7,8 +7,9 @@ import (
 )
 
 // semanticRules enforces what the spec states in prose rather than schema: surface ids are
-// non-empty and created once per batch, component ids are unique per list with at most one
-// "root" per list, and every surface created in the batch ends up with a root component.
+// non-empty and created once per batch, component ids are unique per list (which is also what
+// keeps a list to at most one "root"), and every surface created in the batch ends up with a
+// root component.
 func semanticRules(messages []map[string]any) []schema.Problem {
 	var out []schema.Problem
 	created := map[string]int{}
@@ -52,9 +53,9 @@ func semanticRules(messages []map[string]any) []schema.Problem {
 					roots++
 				}
 			}
-			if roots > 1 {
-				out = append(out, schema.Problem{Path: fmt.Sprintf("messages[%d].updateComponents.components", i), Message: `more than one component has id "root"`})
-			}
+			// roots can only ever be 0 or 1: a second component with id "root" is a duplicate id
+			// and was already reported above. roots is counted only to answer "does this surface
+			// end up with a root at all".
 			if roots >= 1 {
 				hasRoot[sid] = true
 			}
