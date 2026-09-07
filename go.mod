@@ -5,6 +5,7 @@ go 1.26.6
 require (
 	github.com/google/jsonschema-go v0.4.3
 	github.com/santhosh-tekuri/jsonschema/v6 v6.0.3
+	golang.org/x/text v0.41.0
 	google.golang.org/adk/v2 v2.3.0
 )
 
@@ -31,7 +32,6 @@ require (
 	golang.org/x/crypto v0.56.0 // indirect
 	golang.org/x/net v0.58.0 // indirect
 	golang.org/x/sys v0.47.0 // indirect
-	golang.org/x/text v0.41.0 // indirect
 	google.golang.org/api v0.297.0 // indirect
 	google.golang.org/genai v1.71.0 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20260904194346-d0f1323225a4 // indirect
