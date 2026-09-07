@@ -4,6 +4,7 @@ go 1.26.6
 
 require (
 	github.com/google/jsonschema-go v0.4.3
+	github.com/santhosh-tekuri/jsonschema/v6 v6.0.3
 	google.golang.org/adk/v2 v2.3.0
 )
 
@@ -21,7 +22,6 @@ require (
 	github.com/googleapis/enterprise-certificate-proxy v0.3.21 // indirect
 	github.com/googleapis/gax-go/v2 v2.24.1 // indirect
 	github.com/gorilla/websocket v1.5.3 // indirect
-	github.com/santhosh-tekuri/jsonschema/v6 v6.0.3 // indirect
 	go.opentelemetry.io/auto/sdk v1.2.1 // indirect
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.71.0 // indirect
 	go.opentelemetry.io/otel v1.46.0 // indirect
