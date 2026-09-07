@@ -14,7 +14,7 @@ const CatalogIDBasic = "https://a2ui.org/specification/v1_0/catalogs/basic/catal
 
 // refComponent and refFunctionCall are the full envelope-level definitions a component or
 // function call must satisfy once its catalog is known: each combines the catalog's bare
-// discriminated union (schema.RefAnyComponent / schema.RefAnyFunction) with the envelope's
+// discriminated union (catalog.json#/$defs/anyComponent, #/$defs/anyFunction) with the envelope's
 // common properties (id/catalogId/accessibility/metadata, or call/catalogId) and closes the
 // schema with unevaluatedProperties:false. Validating against the catalog union alone (as the
 // bare Ref constants do) would miss unknown properties, since v1.0's basic catalog components

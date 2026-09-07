@@ -1,6 +1,7 @@
 package spec
 
 import (
+	"io/fs"
 	"reflect"
 	"testing"
 )
@@ -11,11 +12,11 @@ func TestEmbeddedFiles(t *testing.T) {
 		"v0_9/catalogs/basic/rules.txt", "v1_0/json/agent_to_renderer.json", "v1_0/json/catalog_definition.json",
 		"v1_0/catalogs/basic/catalog.json",
 	} {
-		if _, err := FS.ReadFile(p); err != nil {
+		if _, err := fs.ReadFile(FS(), p); err != nil {
 			t.Errorf("%s: %v", p, err)
 		}
 	}
-	if Source == "" {
+	if Source() == "" {
 		t.Error("Source is empty; run scripts/sync-spec.sh")
 	}
 }

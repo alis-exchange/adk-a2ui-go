@@ -1,12 +1,13 @@
 // Package spec embeds the official A2UI specification files (JSON schemas and the basic
 // catalog) verbatim, per major version directory, so validation runs against exactly what
-// upstream publishes. Refresh with scripts/sync-spec.sh; Source records the upstream commit.
+// upstream publishes. Refresh with scripts/sync-spec.sh; [Source] records the upstream commit.
 package spec
 
 import (
 	"embed"
 	"encoding/json"
 	"fmt"
+	"io/fs"
 	"strings"
 )
 
@@ -17,13 +18,22 @@ const (
 )
 
 //go:embed SOURCE v0_9/json/*.json v0_9/catalogs/basic/catalog.json v0_9/catalogs/basic/rules.txt v1_0/json/*.json v1_0/catalogs/basic/catalog.json
-var FS embed.FS
+var files embed.FS
 
-// Source is the upstream commit the embedded files were copied from ("<short-sha> <date>").
-var Source = func() string {
-	b, _ := FS.ReadFile("SOURCE")
+// FS returns the embedded specification tree, rooted at the directory holding SOURCE, v0_9 and
+// v1_0. It is a function rather than an exported variable so callers cannot swap the embedded
+// files out from under the validators; read from it with [io/fs.ReadFile].
+func FS() fs.FS { return files }
+
+// source is the upstream commit the embedded files were copied from ("<short-sha> <date>").
+var source = func() string {
+	b, _ := files.ReadFile("SOURCE")
 	return strings.TrimSpace(string(b))
 }()
+
+// Source returns the upstream commit the embedded files were copied from
+// ("<short-sha> <date>"), as recorded by scripts/sync-spec.sh in spec/SOURCE.
+func Source() string { return source }
 
 // MajorFor maps a wire version to its embedded directory.
 func MajorFor(version string) (string, bool) {
@@ -54,7 +64,7 @@ func BasicCatalogIDs(major string) []string {
 // BasicCatalog returns the embedded basic catalog for major, its canonical id, and the prompt
 // guidance shipped with it: rules.txt for v0_9, the catalog's "instructions" field for v1_0.
 func BasicCatalog(major string) (catalog map[string]any, catalogID, instructions string, err error) {
-	b, err := FS.ReadFile(major + "/catalogs/basic/catalog.json")
+	b, err := files.ReadFile(major + "/catalogs/basic/catalog.json")
 	if err != nil {
 		return nil, "", "", fmt.Errorf("spec: no basic catalog for %q: %w", major, err)
 	}
@@ -63,7 +73,7 @@ func BasicCatalog(major string) (catalog map[string]any, catalogID, instructions
 	}
 	catalogID, _ = catalog["catalogId"].(string)
 	var parts []string
-	if rules, err := FS.ReadFile(major + "/catalogs/basic/rules.txt"); err == nil {
+	if rules, err := files.ReadFile(major + "/catalogs/basic/rules.txt"); err == nil {
 		parts = append(parts, strings.TrimSpace(string(rules)))
 	}
 	if s, ok := catalog["instructions"].(string); ok && strings.TrimSpace(s) != "" {

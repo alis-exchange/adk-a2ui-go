@@ -6,11 +6,13 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io/fs"
 	"net/url"
 	"path"
 	"regexp"
 	"strings"
 	"sync"
+	"sync/atomic"
 
 	"github.com/santhosh-tekuri/jsonschema/v6"
 	"go.alis.build/adk/a2ui/spec"
@@ -19,15 +21,12 @@ import (
 // Entry schema files, relative to spec/<major>/json.
 const (
 	EntryOutboundV09 = "server_to_client_list.json"
-	EntryInboundV09  = "client_to_server.json"
 	EntryOutboundV10 = "agent_to_renderer_list.json"
-	EntryInboundV10  = "renderer_to_agent.json"
 )
 
 // Catalog-relative references the spec uses; CompileRef wraps one of these.
 const (
 	RefAnyComponent = "catalog.json#/$defs/anyComponent"
-	RefAnyFunction  = "catalog.json#/$defs/anyFunction"
 	RefTheme        = "catalog.json#/$defs/theme"
 )
 
@@ -123,7 +122,7 @@ func (l *loader) Load(u string) (any, error) {
 		}
 		return normalize(l.catalog)
 	}
-	b, err := spec.FS.ReadFile(l.major + "/json/" + base)
+	b, err := fs.ReadFile(spec.FS(), l.major+"/json/"+base)
 	if err != nil {
 		return nil, fmt.Errorf("schema: no embedded schema for %s: %w", u, err)
 	}
@@ -171,12 +170,23 @@ func stubCatalog() map[string]any {
 	}
 }
 
+// unmarshalable counts catalogs that could not be marshalled, so each one gets its own cache
+// key. Two distinct catalogs that both fail to marshal must never share a compiled schema.
+var unmarshalable atomic.Uint64
+
+// catalogKey is the cache key for a catalog document: its id plus a digest of its canonical JSON.
+// A catalog that cannot be marshalled (a non-JSON value somewhere inside it) has no canonical
+// form, so it gets a fresh, never-repeated key instead: compilation still happens and still
+// fails loudly if the document is unusable, but no two failing catalogs can collide on one entry.
 func catalogKey(c map[string]any) string {
 	if c == nil {
 		return "stub"
 	}
 	id, _ := c["catalogId"].(string)
-	b, _ := json.Marshal(c) // encoding/json sorts map keys, so this is canonical
+	b, err := json.Marshal(c) // encoding/json sorts map keys, so this is canonical
+	if err != nil {
+		return fmt.Sprintf("%s!marshal-error:%d", id, unmarshalable.Add(1))
+	}
 	sum := sha256.Sum256(b)
 	return id + ":" + hex.EncodeToString(sum[:8])
 }
