@@ -5,166 +5,99 @@ import (
 	"strings"
 	"testing"
 
-	"go.alis.build/adk/a2ui/kit"
 	"google.golang.org/adk/v2/agent"
 	"google.golang.org/adk/v2/tool/toolconfirmation"
+
+	"go.alis.build/adk/a2ui/kit"
+	"go.alis.build/adk/a2ui/v09"
 )
 
-// fakeContext is the smallest agent.Context that lets a function tool run outside a runner.
-// StrictContextMock panics on anything not overridden, so only the paths the tools touch are
-// implemented: context values (via Ctx) and the confirmation check inside functiontool.Run.
-type fakeContext struct {
-	agent.StrictContextMock
-}
+type fakeContext struct{ agent.StrictContextMock }
 
 func (f *fakeContext) ToolConfirmation() *toolconfirmation.ToolConfirmation { return nil }
 
-func newFakeContext(ctx context.Context) *fakeContext {
-	return &fakeContext{agent.NewStrictContextMock(ctx)}
-}
+func fake(ctx context.Context) *fakeContext { return &fakeContext{agent.NewStrictContextMock(ctx)} }
 
-// runnable mirrors the unexported interface ADK uses to execute function tools.
 type runnable interface {
 	Run(ctx agent.Context, args any) (map[string]any, error)
 }
 
-func withCapabilities(ctx context.Context) context.Context {
-	return kit.WithA2UICapabilities(ctx, map[string]any{
-		"supportedCatalogIds": []any{"https://example.com/catalog.json"},
-		"inlineCatalogs":      []any{map[string]any{"name": "inline"}},
+func capsCtx(t *testing.T, version string) context.Context {
+	t.Helper()
+	return kit.WithA2UICapabilities(context.Background(), map[string]any{
+		version: map[string]any{"supportedCatalogIds": []any{v09.CatalogIDBasic}},
 	})
 }
 
-func TestToolsetHiddenWithoutCapabilities(t *testing.T) {
-	ts, err := NewA2UIToolset()
+func TestToolsetVisibility(t *testing.T) {
+	ts, err := NewToolset(kit.V09, kit.ToolOptions{})
 	if err != nil {
-		t.Fatalf("NewA2UIToolset: %v", err)
+		t.Fatal(err)
 	}
-	tools, err := ts.Tools(newFakeContext(t.Context()))
-	if err != nil {
-		t.Fatalf("Tools: %v", err)
+	if tools, _ := ts.Tools(fake(context.Background())); len(tools) != 0 {
+		t.Error("visible without capabilities")
 	}
-	if len(tools) != 0 {
-		t.Fatalf("expected no tools without capabilities, got %d", len(tools))
+	if tools, _ := ts.Tools(fake(capsCtx(t, kit.V10))); len(tools) != 0 {
+		t.Error("visible for a different version")
+	}
+	tools, err := ts.Tools(fake(capsCtx(t, kit.V09)))
+	if err != nil || len(tools) != 2 || tools[0].Name() != CatalogToolName || tools[1].Name() != GenerateA2UIMessagesToolName {
+		t.Errorf("tools = %v, %v", tools, err)
+	}
+	if !strings.Contains(tools[1].Description(), `"version": "v0.9"`) || !strings.Contains(tools[1].Description(), v09.CatalogIDBasic) {
+		t.Error("description must name the version and the negotiated catalog id")
+	}
+	if _, err := NewToolset(kit.V10, kit.ToolOptions{}); err == nil {
+		t.Error("v1.0 must be rejected by the v09 package")
 	}
 }
 
-func TestToolsetVisibleWithCapabilities(t *testing.T) {
-	ts, err := NewA2UIToolset()
-	if err != nil {
-		t.Fatalf("NewA2UIToolset: %v", err)
-	}
-	tools, err := ts.Tools(newFakeContext(withCapabilities(t.Context())))
-	if err != nil {
-		t.Fatalf("Tools: %v", err)
-	}
-	want := []string{CatalogToolName, GenerateA2UIMessagesToolName}
-	if len(tools) != len(want) {
-		t.Fatalf("expected %d tools, got %d", len(want), len(tools))
-	}
-	for i, name := range want {
-		if tools[i].Name() != name {
-			t.Errorf("tool[%d] = %q, want %q", i, tools[i].Name(), name)
-		}
-	}
-}
-
-func TestCatalogToolReturnsCapabilities(t *testing.T) {
-	tl, err := A2UICatalogTool()
-	if err != nil {
-		t.Fatalf("A2UICatalogTool: %v", err)
-	}
-	out, err := tl.(runnable).Run(newFakeContext(withCapabilities(t.Context())), map[string]any{})
-	if err != nil {
-		t.Fatalf("Run: %v", err)
-	}
-	urls, _ := out["catalog_urls"].([]any)
-	if len(urls) != 1 || urls[0] != "https://example.com/catalog.json" {
-		t.Errorf("catalog_urls = %v", out["catalog_urls"])
-	}
-	inline, _ := out["inline_catalogs"].([]any)
-	if len(inline) != 1 || inline[0] != `{"name":"inline"}` {
-		t.Errorf("inline_catalogs = %v", out["inline_catalogs"])
-	}
-}
-
-func TestCatalogToolWithoutCapabilitiesReturnsEmpty(t *testing.T) {
-	tl, err := A2UICatalogTool()
-	if err != nil {
-		t.Fatalf("A2UICatalogTool: %v", err)
-	}
-	out, err := tl.(runnable).Run(newFakeContext(t.Context()), map[string]any{})
-	if err != nil {
-		t.Fatalf("Run: %v", err)
-	}
-	if urls, _ := out["catalog_urls"].([]any); len(urls) != 0 {
-		t.Errorf("catalog_urls = %v, want empty", urls)
-	}
-}
-
-func surfaceMessages(withRoot bool) []any {
-	rootID := "card-1"
-	if withRoot {
-		rootID = "root"
-	}
+func messages(version, component string) []any {
 	return []any{
-		map[string]any{
-			"version": "v0.9",
-			"createSurface": map[string]any{
-				"surfaceId": "s1",
-				"catalogId": "https://example.com/catalog.json",
-			},
-		},
-		map[string]any{
-			"version": "v0.9",
-			"updateComponents": map[string]any{
-				"surfaceId": "s1",
-				"components": []any{
-					map[string]any{"component": "Card", "id": rootID, "child": "t1"},
-					map[string]any{"component": "Text", "id": "t1", "text": "hi"},
-				},
-			},
-		},
+		map[string]any{"version": version, "createSurface": map[string]any{"surfaceId": "s", "catalogId": v09.CatalogIDBasic}},
+		map[string]any{"version": version, "updateComponents": map[string]any{"surfaceId": "s", "components": []any{
+			map[string]any{"id": "root", "component": "Card", "child": "t"},
+			map[string]any{"id": "t", "component": "Text", "text": "hi", "colour": component},
+		}}},
 	}
 }
 
-func TestGenerateAcceptsValidMessages(t *testing.T) {
-	tl, err := GenerateA2UIMessages()
+func TestGenerateTool(t *testing.T) {
+	params := kit.VersionParams{SupportedCatalogIDs: []string{v09.CatalogIDBasic}}
+	tl, err := GenerateTool(kit.V091, params, kit.ToolOptions{Strict: true})
 	if err != nil {
-		t.Fatalf("GenerateA2UIMessages: %v", err)
+		t.Fatal(err)
 	}
-	out, err := tl.(runnable).Run(newFakeContext(t.Context()), map[string]any{"messages": surfaceMessages(true)})
+	ctx := fake(context.Background())
+	good := messages("v0.9.1", "")
+	good[1].(map[string]any)["updateComponents"].(map[string]any)["components"].([]any)[1] = map[string]any{"id": "t", "component": "Text", "text": "hi"}
+	out, err := tl.(runnable).Run(ctx, map[string]any{"messages": good})
 	if err != nil {
-		t.Fatalf("Run: %v", err)
+		t.Fatalf("valid v0.9.1 batch rejected: %v", err)
 	}
-	if out["status"] != "success" || out["is_valid"] != true {
-		t.Errorf("unexpected output: %v", out)
+	if out["status"] != "success" {
+		t.Errorf("out = %v", out)
 	}
-	if msgs, _ := out["messages"].([]any); len(msgs) != 2 {
-		t.Errorf("messages not echoed: %v", out["messages"])
+	if _, err := tl.(runnable).Run(ctx, map[string]any{"messages": messages("v0.9.1", "red")}); err == nil || !strings.Contains(err.Error(), `unknown property "colour"`) {
+		t.Errorf("catalog violation not reported: %v", err)
+	}
+	if _, err := tl.(runnable).Run(ctx, map[string]any{"messages": messages("v0.9", "")}); err == nil || !strings.Contains(err.Error(), `must be "v0.9.1"`) {
+		t.Errorf("wrong version not reported: %v", err)
 	}
 }
 
-func TestGenerateRejectsMissingRoot(t *testing.T) {
-	tl, err := GenerateA2UIMessages()
+func TestCatalogTool(t *testing.T) {
+	params := kit.VersionParams{SupportedCatalogIDs: []string{v09.CatalogIDBasic}}
+	tl, err := CatalogTool(kit.V09, params, kit.ToolOptions{})
 	if err != nil {
-		t.Fatalf("GenerateA2UIMessages: %v", err)
+		t.Fatal(err)
 	}
-	_, err = tl.(runnable).Run(newFakeContext(t.Context()), map[string]any{"messages": surfaceMessages(false)})
-	if err == nil || !strings.Contains(err.Error(), "root") {
-		t.Fatalf("expected root-component error, got %v", err)
-	}
-}
-
-func TestGenerateRejectsWrongVersion(t *testing.T) {
-	tl, err := GenerateA2UIMessages()
+	out, err := tl.(runnable).Run(fake(context.Background()), map[string]any{})
 	if err != nil {
-		t.Fatalf("GenerateA2UIMessages: %v", err)
+		t.Fatal(err)
 	}
-	msgs := surfaceMessages(true)
-	msgs[0].(map[string]any)["version"] = "v1.0"
-	_, err = tl.(runnable).Run(newFakeContext(t.Context()), map[string]any{"messages": msgs})
-	if err == nil {
-		t.Fatal("expected schema error for wrong version, got nil")
+	cats, _ := out["catalogs"].(map[string]any)
+	if _, ok := cats[v09.CatalogIDBasic]; !ok {
+		t.Errorf("basic catalog not returned: %v", out)
 	}
 }
