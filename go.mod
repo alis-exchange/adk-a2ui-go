@@ -1,10 +1,10 @@
 module go.alis.build/adk/a2ui
 
-go 1.26.1
+go 1.26.6
 
 require (
 	github.com/google/jsonschema-go v0.4.3
-	google.golang.org/adk v1.6.1
+	google.golang.org/adk/v2 v2.3.0
 )
 
 require (
@@ -24,7 +24,7 @@ require (
 	go.opentelemetry.io/auto/sdk v1.2.1 // indirect
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.71.0 // indirect
 	go.opentelemetry.io/otel v1.46.0 // indirect
-	go.opentelemetry.io/otel/log v0.20.0 // indirect
+	go.opentelemetry.io/otel/log v0.21.0 // indirect
 	go.opentelemetry.io/otel/metric v1.46.0 // indirect
 	go.opentelemetry.io/otel/trace v1.46.0 // indirect
 	golang.org/x/crypto v0.56.0 // indirect

@@ -6,9 +6,9 @@ import (
 
 	"github.com/google/jsonschema-go/jsonschema"
 	"go.alis.build/adk/a2ui/kit"
-	"google.golang.org/adk/agent"
-	"google.golang.org/adk/tool"
-	"google.golang.org/adk/tool/functiontool"
+	"google.golang.org/adk/v2/agent"
+	"google.golang.org/adk/v2/tool"
+	"google.golang.org/adk/v2/tool/functiontool"
 )
 
 const (
@@ -143,7 +143,7 @@ func (o *GenerateA2UIToolOutput) JSONSchema() *jsonschema.Schema {
 // args.Messages against the resolved JSON Schema, then applies extra semantic checks (root
 // component per surface). Validation errors are returned as tool errors so the model can self-correct.
 func GenerateA2UIMessages() (tool.Tool, error) {
-	handler := func(ctx agent.ToolContext, args *GenerateA2UIToolInput) (*GenerateA2UIToolOutput, error) {
+	handler := func(ctx agent.Context, args *GenerateA2UIToolInput) (*GenerateA2UIToolOutput, error) {
 		rs, err := A2UiServerToClientListSchema.Resolve(nil)
 		if err != nil {
 			return nil, fmt.Errorf("failed to resolve A2UI schema: %v", err)
@@ -273,7 +273,7 @@ func (o *A2UICatalogToolOutput) JSONSchema() *jsonschema.Schema {
 // no capabilities are present (for example before negotiation), the handler returns empty slices
 // without error so the model can still call the tool safely.
 func A2UICatalogTool() (tool.Tool, error) {
-	handler := func(ctx agent.ToolContext, input *A2UICatalogToolInput) (*A2UICatalogToolOutput, error) {
+	handler := func(ctx agent.Context, input *A2UICatalogToolInput) (*A2UICatalogToolOutput, error) {
 		a2uiCapabilities, ok := kit.CapabilitiesFromContext(ctx)
 		if !ok {
 			// No negotiated A2UI params on this turn; empty output is valid.

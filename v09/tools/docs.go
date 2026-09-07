@@ -6,7 +6,7 @@
 // and ADK tools that produce v0.9 message arrays. Future A2UI spec versions will have their own
 // packages (e.g. v10/tools).
 //
-// The primary entry points are [GenerateA2UIMessages], which returns a [google.golang.org/adk/tool.Tool]
+// The primary entry points are [GenerateA2UIMessages], which returns a [google.golang.org/adk/v2/tool.Tool]
 // that validates [GenerateA2UIToolInput] and, on success, returns [GenerateA2UIToolOutput] echoing the
 // messages, and [NewA2UIToolset], which wraps that tool in a filtered toolset
 // exposed only when A2UI capabilities are present on the agent context (see

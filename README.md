@@ -6,7 +6,7 @@ Transport-agnostic Go libraries for the **[A2UI](https://a2ui.org/)** (Agent-to-
 
 ## Features
 
-- **ADK tools** (`v09/tools`) — `generate_a2ui_messages` [function tool](https://pkg.go.dev/google.golang.org/adk/tool/functiontool) with specification derived from the [A2UI v0.9 server-to-client message list](https://a2ui.org/specification/v0.9-a2ui/), plus semantic checks (e.g. `id: "root"` per surface).
+- **ADK tools** (`v09/tools`) — `generate_a2ui_messages` [function tool](https://pkg.go.dev/google.golang.org/adk/v2/tool/functiontool) with specification derived from the [A2UI v0.9 server-to-client message list](https://a2ui.org/specification/v0.9-a2ui/), plus semantic checks (e.g. `id: "root"` per surface).
 - **Capabilities** (`kit`) — Version-agnostic helpers to store and retrieve A2UI client capabilities on `context.Context`. Transport adapters call `kit.WithA2UICapabilities` after extracting capabilities from their transport-specific format; versioned tools read them back via `kit.CapabilitiesFromContext`.
 
 ## Packages
@@ -44,6 +44,15 @@ The module is organized by A2UI spec version so multiple versions can coexist. V
 ```bash
 go get go.alis.build/adk/a2ui@latest
 ```
+
+### Version compatibility
+
+| a2ui-go | ADK Go module              | Go      |
+| ------- | -------------------------- | ------- |
+| `v1.x`  | `google.golang.org/adk/v2` | 1.26.6+ |
+| `v0.x`  | `google.golang.org/adk`    | 1.26+   |
+
+The two ADK majors define different `tool.Toolset` and `agent.Context` types, so an agent must use the a2ui-go line that matches its ADK module. Agents still on ADK Go v1 should pin `v0.x`; that line is maintained on the [`v0` branch](https://github.com/alis-exchange/adk-a2ui-go/tree/v0).
 
 ## Getting started
 
