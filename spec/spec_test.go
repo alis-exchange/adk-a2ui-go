@@ -1,6 +1,9 @@
 package spec
 
-import "testing"
+import (
+	"reflect"
+	"testing"
+)
 
 func TestEmbeddedFiles(t *testing.T) {
 	for _, p := range []string{
@@ -51,5 +54,40 @@ func TestMajorFor(t *testing.T) {
 	}
 	if _, ok := MajorFor("v2.0"); ok {
 		t.Error("v2.0 should be unknown")
+	}
+}
+
+func TestBasicCatalogIDsOrder(t *testing.T) {
+	// v0_9: canonical id first, then alias
+	v09IDs := BasicCatalogIDs(MajorV09)
+	wantV09 := []string{
+		"https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json",
+		"https://a2ui.org/specification/v0_9_1/catalogs/basic/catalog.json",
+	}
+	if !reflect.DeepEqual(v09IDs, wantV09) {
+		t.Errorf("BasicCatalogIDs(MajorV09) = %v, want %v", v09IDs, wantV09)
+	}
+
+	// v1_0: single canonical id
+	v10IDs := BasicCatalogIDs(MajorV10)
+	wantV10 := []string{
+		"https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json",
+	}
+	if !reflect.DeepEqual(v10IDs, wantV10) {
+		t.Errorf("BasicCatalogIDs(MajorV10) = %v, want %v", v10IDs, wantV10)
+	}
+
+	// unknown major: empty slice
+	unknownIDs := BasicCatalogIDs("v9_9")
+	if !reflect.DeepEqual(unknownIDs, []string(nil)) {
+		t.Errorf("BasicCatalogIDs(unknown) = %v, want nil", unknownIDs)
+	}
+
+	// copy semantics: mutating returned slice does not affect later calls
+	first := BasicCatalogIDs(MajorV09)
+	first[0] = "mutated"
+	second := BasicCatalogIDs(MajorV09)
+	if !reflect.DeepEqual(second, wantV09) {
+		t.Errorf("after mutating first call, second = %v, want %v", second, wantV09)
 	}
 }
