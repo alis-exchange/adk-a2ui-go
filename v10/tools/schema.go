@@ -53,10 +53,10 @@ func EnvelopeSchema() *jsonschema.Schema {
 				AdditionalProperties: &jsonschema.Schema{},
 			},
 			"functionCall": {
-				Type:        "object",
-				Description: "A function call: \"call\" names the function, \"catalogId\" names its catalog, and the function's own arguments sit alongside as further properties.",
-				Properties:  map[string]*jsonschema.Schema{"call": str("The name of the function to call."), "catalogId": str("The catalog ID for this function.")},
-				Required:    []string{"call"},
+				Type:                 "object",
+				Description:          "A function call: \"call\" names the function, \"catalogId\" names its catalog, and the function's own arguments sit alongside as further properties.",
+				Properties:           map[string]*jsonschema.Schema{"call": str("The name of the function to call."), "catalogId": str("The catalog ID for this function.")},
+				Required:             []string{"call"},
 				AdditionalProperties: &jsonschema.Schema{},
 			},
 			"CreateSurfaceMessage": message("createSurface", &jsonschema.Schema{
@@ -111,7 +111,7 @@ func EnvelopeSchema() *jsonschema.Schema {
 				Properties: map[string]*jsonschema.Schema{
 					"functionCallId": str("The id from the renderer's callAgentFunction."),
 					"value":          {Description: "The function result. Provide exactly one of value or error."},
-					"error": {Type: "object", Properties: map[string]*jsonschema.Schema{"code": str("Error code."), "message": str("Human-readable error.")}, Required: []string{"code", "message"}},
+					"error":          {Type: "object", Properties: map[string]*jsonschema.Schema{"code": str("Error code."), "message": str("Human-readable error.")}, Required: []string{"code", "message"}},
 				},
 				Required:             []string{"functionCallId"},
 				AdditionalProperties: noExtra(),
