@@ -1,45 +1,75 @@
 package kit
 
-import "encoding/json"
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"sync"
+)
 
-// GetCatalogs extracts catalog-related fields from an A2UI extension params map (or similar
-// capability object):
-//
-//   - supportedCatalogIds: optional array of catalog ID strings.
-//
-//   - inlineCatalogs: optional array of arbitrary JSON objects; each element is re-marshaled and
-//     unmarshaled into map[string]any for a stable map shape.
-//
-// Either slice may be empty if the key is missing or not of the expected type. An error is
-// returned only if JSON remarshal of an inline catalog fails.
-func GetCatalogs(capabilities map[string]any) ([]string, []map[string]any, error) {
-	var supportedCatalogIds []string
-	switch v := capabilities["supportedCatalogIds"].(type) {
-	case []string:
-		supportedCatalogIds = v
-	case []any:
-		for _, catalogIDAny := range v {
-			if catalogID, ok := catalogIDAny.(string); ok {
-				supportedCatalogIds = append(supportedCatalogIds, catalogID)
-			}
+// CatalogResolver supplies catalog documents by id. ok=false means the id is unknown to this
+// resolver; err means the resolver itself failed and validation should abort.
+type CatalogResolver interface {
+	ResolveCatalog(ctx context.Context, catalogID string) (catalog map[string]any, ok bool, err error)
+}
+
+// Registry is a thread-safe in-memory CatalogResolver keyed by each catalog's own "catalogId".
+// Register the catalogs your renderers use once at startup.
+type Registry struct {
+	mu       sync.RWMutex
+	catalogs map[string]map[string]any
+}
+
+func NewRegistry() *Registry {
+	return &Registry{catalogs: map[string]map[string]any{}}
+}
+
+// Register stores catalog under its "catalogId"; a later Register with the same id replaces it.
+func (r *Registry) Register(catalog map[string]any) error {
+	id, _ := catalog["catalogId"].(string)
+	if id == "" {
+		return errors.New("kit: catalog has no string catalogId")
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.catalogs[id] = catalog
+	return nil
+}
+
+// RegisterJSON parses data as a catalog document and registers it.
+func (r *Registry) RegisterJSON(data []byte) error {
+	var catalog map[string]any
+	if err := json.Unmarshal(data, &catalog); err != nil {
+		return fmt.Errorf("kit: catalog JSON: %w", err)
+	}
+	return r.Register(catalog)
+}
+
+func (r *Registry) ResolveCatalog(_ context.Context, id string) (map[string]any, bool, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	c, ok := r.catalogs[id]
+	return c, ok, nil
+}
+
+type chain []CatalogResolver
+
+// Chain consults resolvers in order and returns the first hit. A resolver error stops the chain.
+func Chain(resolvers ...CatalogResolver) CatalogResolver { return chain(resolvers) }
+
+func (c chain) ResolveCatalog(ctx context.Context, id string) (map[string]any, bool, error) {
+	for _, r := range c {
+		if r == nil {
+			continue
+		}
+		cat, ok, err := r.ResolveCatalog(ctx, id)
+		if err != nil {
+			return nil, false, err
+		}
+		if ok {
+			return cat, true, nil
 		}
 	}
-
-	var catalogs []map[string]any
-	if inlineCatalogs, ok := capabilities["inlineCatalogs"].([]any); ok {
-		for _, inlineCatalogAny := range inlineCatalogs {
-			inlineCatalogBytes, err := json.Marshal(inlineCatalogAny)
-			if err != nil {
-				return nil, nil, err
-			}
-
-			var inlineCatalog map[string]any
-			if err := json.Unmarshal(inlineCatalogBytes, &inlineCatalog); err != nil {
-				return nil, nil, err
-			}
-
-			catalogs = append(catalogs, inlineCatalog)
-		}
-	}
-	return supportedCatalogIds, catalogs, nil
+	return nil, false, nil
 }

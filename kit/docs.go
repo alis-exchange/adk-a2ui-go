@@ -1,11 +1,8 @@
-// Package kit contains version-agnostic helpers for A2UI client capability data:
-// attaching it to a [context.Context] and parsing catalog fields from a capability
-// params map.
+// Package kit holds the version-agnostic pieces every A2UI spec version shares: storing the
+// client's capabilities document on a context, negotiating a wire version, resolving catalog
+// documents by id, and the option structs the version packages accept.
 //
-// [WithA2UICapabilities] stores a capability map on the context so that versioned
-// tool packages (e.g. [go.alis.build/adk/a2ui/v09/tools]) can read it back via
-// [CapabilitiesFromContext] to decide whether to expose A2UI tools.
-//
-// [GetCatalogs] extracts supportedCatalogIds and inlineCatalogs from a capability
-// params map in the shape described by the A2UI specification (https://a2ui.org/).
+// A transport adapter extracts the capabilities object from its own metadata (A2A
+// message.metadata["a2uiClientCapabilities"] for v0.9.x, ["a2uiRendererCapabilities"] for
+// v1.0) and calls [WithA2UICapabilities]. The root package's toolset then calls [Negotiate].
 package kit
