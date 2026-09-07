@@ -6,6 +6,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -146,5 +147,34 @@ func TestInlineAndRegisteredCatalogsAreUsed(t *testing.T) {
 	registered := kit.ValidateOptions{Version: kit.V09, Resolver: reg, Strict: true}
 	if err := Validate(context.Background(), msgs(bad), registered); err == nil {
 		t.Error("registered catalog should enforce Badge.label")
+	}
+}
+
+func TestFinalizeDedupesAndSorts(t *testing.T) {
+	in := []schema.Problem{
+		{Path: "messages[2]", Message: "b"},
+		{Path: "messages[0]", Message: "a"},
+		{Path: "messages[2]", Message: "b"},
+		{Path: "messages[0]", Message: "z"},
+	}
+	want := []schema.Problem{
+		{Path: "messages[0]", Message: "a"},
+		{Path: "messages[0]", Message: "z"},
+		{Path: "messages[2]", Message: "b"},
+	}
+	got := finalize(in)
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("finalize(%v) = %v, want %v", in, got, want)
+	}
+}
+
+func TestStrictSkipsSurfacesNotCreatedInBatch(t *testing.T) {
+	msgs := []map[string]any{
+		{"version": "v0.9", "updateComponents": map[string]any{"surfaceId": "pre-existing", "components": []any{
+			map[string]any{"id": "root", "component": "Anything", "x": 1.0},
+		}}},
+	}
+	if err := Validate(context.Background(), msgs, kit.ValidateOptions{Version: kit.V09, Strict: true}); err != nil {
+		t.Errorf("surface not created in this batch should skip catalog checks even in strict mode: %v", err)
 	}
 }

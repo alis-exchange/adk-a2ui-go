@@ -1,5 +1,3 @@
-// Package v09 validates A2UI v0.9 and v0.9.1 server-to-client message batches against the
-// official schema, the negotiated catalog, and the semantic rules the spec keeps in prose.
 package v09
 
 import (
@@ -36,7 +34,7 @@ func Validate(ctx context.Context, messages []map[string]any, opts kit.ValidateO
 	if err := envelope.Validate(inst); err != nil {
 		// Structure is broken; component-level checks would only add noise.
 		problems = append(problems, schema.Format(err, inst, "messages")...)
-		return &schema.ValidationError{Problems: dedupe(problems)}
+		return &schema.ValidationError{Problems: finalize(problems)}
 	}
 
 	catalogProblems, err := validateAgainstCatalogs(ctx, eng, messages, opts, v091)
@@ -45,19 +43,19 @@ func Validate(ctx context.Context, messages []map[string]any, opts kit.ValidateO
 	}
 	problems = append(problems, catalogProblems...)
 	problems = append(problems, semanticRules(messages)...)
-	problems = dedupe(problems)
+	problems = finalize(problems)
 	if len(problems) == 0 {
 		return nil
 	}
-	sort.SliceStable(problems, func(i, j int) bool { return problems[i].Path < problems[j].Path })
 	return &schema.ValidationError{Problems: problems}
 }
 
-// dedupe drops problems whose (Path, Message) pair already appeared, keeping the first
-// occurrence. checkVersion and the schema formatter can both report the same wrong-version
-// finding for one message (e.g. messages[0].version: must be "v0.9"), and this keeps the
-// returned error from repeating it.
-func dedupe(problems []schema.Problem) []schema.Problem {
+// finalize drops problems whose (Path, Message) pair already appeared, keeping the first
+// occurrence, and sorts the result stably by Path. checkVersion and the schema formatter can
+// both report the same wrong-version finding for one message (e.g.
+// messages[0].version: must be "v0.9"), and every return path must apply this the same way so
+// the returned error is deterministic regardless of which pass produced the problems.
+func finalize(problems []schema.Problem) []schema.Problem {
 	seen := make(map[schema.Problem]bool, len(problems))
 	out := problems[:0:0]
 	for _, p := range problems {
@@ -67,6 +65,7 @@ func dedupe(problems []schema.Problem) []schema.Problem {
 		seen[p] = true
 		out = append(out, p)
 	}
+	sort.SliceStable(out, func(i, j int) bool { return out[i].Path < out[j].Path })
 	return out
 }
 
