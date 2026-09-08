@@ -62,8 +62,9 @@ func Validate(ctx context.Context, messages []map[string]any, opts kit.ValidateO
 
 // surfaceInfo records what this batch's createSurface said about a surface.
 type surfaceInfo struct {
-	index     int
-	catalogID string
+	index        int
+	catalogID    string
+	hasCatalogID bool // the createSurface carried a catalogId key, even if empty
 }
 
 func createdSurfaces(messages []map[string]any) map[string]surfaceInfo {
@@ -72,8 +73,9 @@ func createdSurfaces(messages []map[string]any) map[string]surfaceInfo {
 		if cs, ok := m["createSurface"].(map[string]any); ok {
 			sid, _ := cs["surfaceId"].(string)
 			cid, _ := cs["catalogId"].(string)
+			_, has := cs["catalogId"]
 			if _, dup := out[sid]; !dup {
-				out[sid] = surfaceInfo{index: i, catalogID: cid}
+				out[sid] = surfaceInfo{index: i, catalogID: cid, hasCatalogID: has}
 			}
 		}
 	}
@@ -133,7 +135,11 @@ func validateAgainstCatalogs(ctx context.Context, eng *schema.Engine, messages [
 			path := fmt.Sprintf("%s[%d]", basePath, j)
 			cid, lookupPath := catalogFor(comp, path, info, created)
 			if cid == "" {
-				if created { // surface exists in this batch but named no catalog: the component must
+				// A surface created with no catalogId at all leaves each component to name one. A
+				// catalogId that is present but empty, on the surface or on the component, is
+				// already reported as "must not be empty" by semanticRules; calling it absent
+				// here would mislead.
+				if _, ownKey := comp["catalogId"]; created && !info.hasCatalogID && !ownKey {
 					problems = append(problems, schema.Problem{Path: path, Message: fmt.Sprintf("must set catalogId because surface %q was created without one", sid)})
 				}
 				continue

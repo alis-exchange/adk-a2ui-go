@@ -213,3 +213,20 @@ func TestUpdatesAfterCreateAndForeignSurfacesAreFine(t *testing.T) {
 		t.Errorf("a surface from an earlier turn and in-order messages must pass: %v", err)
 	}
 }
+
+func TestEmptyCatalogIDIsReportedOnce(t *testing.T) {
+	msgs := []map[string]any{
+		{"version": "v1.0", "createSurface": map[string]any{"surfaceId": "s", "catalogId": ""}},
+		{"version": "v1.0", "updateComponents": map[string]any{"surfaceId": "s", "components": []any{map[string]any{"id": "root", "component": "Text", "text": "hi", "catalogId": ""}}}},
+	}
+	err := Validate(context.Background(), msgs, kit.ValidateOptions{Version: kit.V10, Strict: true})
+	var ve *schema.ValidationError
+	if !errors.As(err, &ve) {
+		t.Fatalf("want *schema.ValidationError, got %v", err)
+	}
+	for _, p := range ve.Problems {
+		if strings.Contains(p.Message, "was created without one") {
+			t.Errorf("an empty catalogId is present, not absent; got %s", p)
+		}
+	}
+}
