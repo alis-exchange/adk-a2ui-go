@@ -129,6 +129,10 @@ func (e *Engine) compile(key, loc string, resource map[string]any, opts CompileO
 	c := jsonschema.NewCompiler()
 	c.UseLoader(&loader{major: e.major, catalog: opts.Catalog, v091: opts.V091})
 	c.UseRegexpEngine(goRegexp)
+	// Formats are annotations by default in draft 2020-12. The spec relies on them being
+	// asserted: DateTimeInput's min/max are "if string then oneOf[format date, time,
+	// date-time]", which every string satisfies without assertion, so oneOf always failed.
+	c.AssertFormat()
 	if resource != nil {
 		doc, err := normalize(resource)
 		if err != nil {

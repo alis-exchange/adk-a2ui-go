@@ -261,3 +261,21 @@ func TestRendererStringsOnZeroValues(t *testing.T) {
 		t.Errorf("FunctionError zero: %q", got)
 	}
 }
+
+func TestDecodeAssertsTimestampFormat(t *testing.T) {
+	m := map[string]any{"version": "v1.0", "action": map[string]any{"name": "n", "surfaceId": "s", "sourceComponentId": "c", "timestamp": "yesterday", "context": map[string]any{}}}
+	_, err := DecodeRendererMessage(context.Background(), m, kit.ValidateOptions{Version: kit.V10})
+	var ve *kit.ValidationError
+	if !errors.As(err, &ve) {
+		t.Fatalf("want *kit.ValidationError for a non-date-time timestamp, got %v", err)
+	}
+	found := false
+	for _, p := range ve.Problems {
+		if p.Path == "action.timestamp" {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("problem must be at action.timestamp:\n%s", ve)
+	}
+}

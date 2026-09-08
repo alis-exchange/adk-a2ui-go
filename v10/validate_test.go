@@ -180,3 +180,24 @@ func TestValidationErrorIsPublic(t *testing.T) {
 		t.Errorf("Error() = %q", err.Error())
 	}
 }
+
+func TestFormatsAreAsserted(t *testing.T) {
+	batch := func(min string) []map[string]any {
+		return []map[string]any{
+			{"version": "v1.0", "createSurface": map[string]any{"surfaceId": "s", "catalogId": CatalogIDBasic}},
+			{"version": "v1.0", "updateComponents": map[string]any{"surfaceId": "s", "components": []any{
+				map[string]any{"id": "root", "component": "DateTimeInput", "value": "", "min": min},
+			}}},
+		}
+	}
+	opts := kit.ValidateOptions{Version: kit.V10, Strict: true}
+	for _, ok := range []string{"2026-01-01", "2026-01-01T10:00:00Z"} {
+		if err := Validate(context.Background(), batch(ok), opts); err != nil {
+			t.Errorf("DateTimeInput min %q must be accepted (format-only oneOf branches need format assertion): %v", ok, err)
+		}
+	}
+	err := Validate(context.Background(), batch("yesterday"), opts)
+	if err == nil || !strings.Contains(err.Error(), "messages[1].updateComponents.components[0].min") {
+		t.Errorf("a non-ISO min must be rejected at its path, got %v", err)
+	}
+}
