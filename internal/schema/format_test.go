@@ -148,3 +148,48 @@ func TestFormatIndexFunctionBranch(t *testing.T) {
 		t.Errorf("@index must select the IndexSystemFunction branch, got:\n%s", text)
 	}
 }
+
+func checkRuleSchema(t *testing.T) *jsonschema.Schema {
+	t.Helper()
+	cat, _, _, err := spec.BasicCatalog(spec.MajorV10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s, err := For(spec.MajorV10).CompileRef("common_types.json#/$defs/CheckRule", cat, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return s
+}
+
+// CheckRule.condition is oneOf[DataBinding, FunctionCall]: a call there sits one union above the
+// catalog's function union, and the pruning must find its way down instead of reporting the
+// two branch names as "catalog functions".
+func TestFormatPrunesCallsInsideCheckRule(t *testing.T) {
+	s := checkRuleSchema(t)
+	cases := []struct {
+		name string
+		rule map[string]any
+		want []string
+	}{
+		{"missing arg", map[string]any{"condition": map[string]any{"call": "required", "args": map[string]any{}}},
+			[]string{`rule.condition.args: missing property "value"`}},
+		{"unknown function", map[string]any{"condition": map[string]any{"call": "nope", "args": map[string]any{}}},
+			[]string{`rule.condition: unknown function "nope" (catalog functions: and, email, formatCurrency, formatDate, formatNumber, formatString, length, not, numeric, openUrl, or, pluralize, regex, required)`}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := s.Validate(tc.rule)
+			if err == nil {
+				t.Fatal("expected a validation error")
+			}
+			var got []string
+			for _, p := range Format(err, tc.rule, "rule") {
+				got = append(got, p.String())
+			}
+			if strings.Join(got, "\n") != strings.Join(tc.want, "\n") {
+				t.Errorf("got:\n%s\nwant:\n%s", strings.Join(got, "\n"), strings.Join(tc.want, "\n"))
+			}
+		})
+	}
+}

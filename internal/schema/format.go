@@ -134,11 +134,14 @@ func pruneCollateralFalseSchema(causes []*jsonschema.ValidationError) []*jsonsch
 // Three unions are recognised by the basename of each branch's $ref: catalog components
 // (#/components/<name>, matched by the instance's "component"), envelope messages
 // (<Key>Message, matched by the present message key), and catalog functions
-// (#/functions/<name>, matched by the instance's "call"). Function calls sit two unions deep:
-// common_types.json's FunctionCall is oneOf[catalog anyFunction, IndexSystemFunction], and the
-// catalog's anyFunction is the union of its functions. A call therefore descends into the
-// "anyFunction" branch and lets that inner union pick by name; "@index" is the one function
-// defined outside the catalog and selects the IndexSystemFunction branch instead.
+// (#/functions/<name>, matched by the instance's "call"). A call can sit one or two unions
+// above the catalog's function union: DynamicValue and CheckRule name a branch FunctionCall,
+// itself oneOf[catalog anyFunction, IndexSystemFunction], and the catalog's anyFunction is the
+// union of its functions. A call therefore descends through a "FunctionCall" or "anyFunction"
+// branch and lets the inner union pick by name; "@index" is the one function defined outside
+// the catalog and selects the IndexSystemFunction branch instead. The unknown-function message
+// is reported only from a union whose branches are all catalog function refs
+// (#/functions/<name>) -- any other union's branch names would mislead.
 func (f *formatter) walkOneOf(e *jsonschema.ValidationError) bool {
 	v, _ := f.valueAt(e.InstanceLocation)
 	inst, ok := v.(map[string]any)
@@ -146,12 +149,14 @@ func (f *formatter) walkOneOf(e *jsonschema.ValidationError) bool {
 		return false
 	}
 	names := make([]string, 0, len(e.Causes))
+	urls := make([]string, 0, len(e.Causes))
 	for _, c := range e.Causes {
 		ref, ok := c.ErrorKind.(*kind.Reference)
 		if !ok {
 			return false
 		}
 		names = append(names, path.Base(ref.URL))
+		urls = append(urls, ref.URL)
 	}
 	if len(names) == 0 {
 		// No Reference-shaped causes to pick a branch from (e.g. an ambiguous oneOf with nil
@@ -178,8 +183,11 @@ func (f *formatter) walkOneOf(e *jsonschema.ValidationError) bool {
 		}
 	}
 	if call != "" && call != "@index" {
+		// A call can sit one or two unions above the catalog's function union: DynamicValue and
+		// CheckRule branches name FunctionCall, whose own union names the catalog's anyFunction.
+		// Descend through either and let the inner union prune by name.
 		for i, c := range e.Causes {
-			if names[i] == "anyFunction" {
+			if names[i] == "anyFunction" || names[i] == "FunctionCall" {
 				f.walk(c)
 				return true
 			}
@@ -190,9 +198,9 @@ func (f *formatter) walkOneOf(e *jsonschema.ValidationError) bool {
 		f.add(e.InstanceLocation, fmt.Sprintf("unknown component %q (catalog components: %s)", comp, strings.Join(names, ", ")))
 		return true
 	}
-	if call != "" && !contains(names, "IndexSystemFunction") {
-		// Inside the catalog's own union the branch names are the function names; at the
-		// outer FunctionCall level they are not, so only report from the inner one.
+	if call != "" && allFunctionRefs(urls) {
+		// Only the catalog's own union names its functions (#/functions/<name>); any other union
+		// that reached here has branch names that would mislead.
 		f.add(e.InstanceLocation, fmt.Sprintf("unknown function %q (catalog functions: %s)", call, strings.Join(names, ", ")))
 		return true
 	}
@@ -306,4 +314,14 @@ func jsonList(vs []any) string {
 		parts[i] = jsonText(v)
 	}
 	return strings.Join(parts, ", ")
+}
+
+// allFunctionRefs reports whether every branch of a union is a catalog function definition.
+func allFunctionRefs(urls []string) bool {
+	for _, u := range urls {
+		if !strings.Contains(u, "/functions/") {
+			return false
+		}
+	}
+	return len(urls) > 0
 }
