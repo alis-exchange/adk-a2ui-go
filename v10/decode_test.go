@@ -262,6 +262,22 @@ func TestRendererStringsOnZeroValues(t *testing.T) {
 	}
 }
 
+func TestAllowedCallersInbound(t *testing.T) {
+	opts := kit.ValidateOptions{Version: kit.V10, Strict: true, Params: kit.VersionParams{InlineCatalogs: []map[string]any{agentFunctions()}}}
+	msg := func(name string) map[string]any {
+		return map[string]any{"version": "v1.0", "callAgentFunction": map[string]any{"surfaceId": "s", "functionCallId": "fc-1", "callFunction": map[string]any{"call": name, "catalogId": "https://example.com/agent-functions.json", "args": map[string]any{}}}}
+	}
+	for _, ok := range []string{"both", "renderer", "plain"} {
+		if _, err := DecodeRendererMessage(context.Background(), msg(ok), opts); err != nil {
+			t.Errorf("%s must be callable by the renderer: %v", ok, err)
+		}
+	}
+	_, err := DecodeRendererMessage(context.Background(), msg("agent"), opts)
+	if err == nil || !strings.Contains(err.Error(), `callAgentFunction.callFunction.call: function "agent" is agentOnly in its catalog; the renderer may not call it`) {
+		t.Errorf("agentOnly must be rejected inbound, got %v", err)
+	}
+}
+
 func TestDecodeAssertsTimestampFormat(t *testing.T) {
 	m := map[string]any{"version": "v1.0", "action": map[string]any{"name": "n", "surfaceId": "s", "sourceComponentId": "c", "timestamp": "yesterday", "context": map[string]any{}}}
 	_, err := DecodeRendererMessage(context.Background(), m, kit.ValidateOptions{Version: kit.V10})

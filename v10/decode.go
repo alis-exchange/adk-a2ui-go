@@ -122,10 +122,15 @@ func checkAgentCall(ctx context.Context, eng *schema.Engine, m map[string]any, o
 	if err != nil {
 		return nil, err
 	}
+	var problems []schema.Problem
 	if err := s.Validate(call); err != nil {
-		return schema.Format(err, call, callPath), nil
+		problems = append(problems, schema.Format(err, call, callPath)...)
 	}
-	return nil, nil
+	name, _ := call["call"].(string)
+	if allowed := allowedCallers(cat, name); allowed != "" && !rendererMayCall(allowed) {
+		problems = append(problems, schema.Problem{Path: callPath + ".call", Message: fmt.Sprintf("function %q is %s in its catalog; the renderer may not call it", name, allowed)})
+	}
+	return problems, nil
 }
 
 // toRendererMessage converts a validated message into its typed form by way of JSON, which is

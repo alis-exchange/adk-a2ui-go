@@ -212,6 +212,10 @@ func validateAgainstCatalogs(ctx context.Context, eng *schema.Engine, messages [
 			if err := s.Validate(call); err != nil {
 				problems = append(problems, schema.Format(err, call, path)...)
 			}
+			name, _ := call["call"].(string)
+			if allowed := allowedCallers(cat, name); allowed != "" && !agentMayCall(allowed) {
+				problems = append(problems, schema.Problem{Path: path + ".call", Message: fmt.Sprintf("function %q is %s in its catalog; the agent may only call functions whose allowedCallers is %q or %q", name, allowed, callerAgentOnly, callerRendererOrAgent)})
+			}
 		}
 	}
 	return problems, nil

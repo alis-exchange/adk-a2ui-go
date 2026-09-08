@@ -214,6 +214,57 @@ func TestUpdatesAfterCreateAndForeignSurfacesAreFine(t *testing.T) {
 	}
 }
 
+// agentFunctions is an inline catalog declaring one function per allowedCallers value, plus one
+// that relies on the spec default (rendererOnly).
+func agentFunctions() map[string]any {
+	fn := func(name, callers string) map[string]any {
+		def := map[string]any{
+			"type": "object", "returnType": "string",
+			"properties": map[string]any{"call": map[string]any{"const": name}, "args": map[string]any{"type": "object", "unevaluatedProperties": false}},
+			"required":   []any{"call", "args"},
+		}
+		if callers != "" {
+			def["allowedCallers"] = callers
+		}
+		return def
+	}
+	return map[string]any{
+		"catalogId": "https://example.com/agent-functions.json",
+		"$defs": map[string]any{
+			"anyComponent": map[string]any{"type": "object"},
+			"anyFunction":  map[string]any{"oneOf": []any{map[string]any{"$ref": "#/functions/both"}, map[string]any{"$ref": "#/functions/agent"}, map[string]any{"$ref": "#/functions/renderer"}, map[string]any{"$ref": "#/functions/plain"}}},
+		},
+		"functions": map[string]any{
+			"both":     fn("both", "rendererOrAgent"),
+			"agent":    fn("agent", "agentOnly"),
+			"renderer": fn("renderer", "rendererOnly"),
+			"plain":    fn("plain", ""),
+		},
+	}
+}
+
+func TestAllowedCallersOutbound(t *testing.T) {
+	opts := kit.ValidateOptions{Version: kit.V10, Strict: true, Params: kit.VersionParams{InlineCatalogs: []map[string]any{agentFunctions()}}}
+	msg := func(name, catalogID string) []map[string]any {
+		return []map[string]any{{"version": "v1.0", "callRendererFunction": map[string]any{"functionCallId": "c1", "callFunction": map[string]any{"call": name, "catalogId": catalogID, "args": map[string]any{}}}}}
+	}
+	for _, ok := range []string{"both", "agent"} {
+		if err := Validate(context.Background(), msg(ok, "https://example.com/agent-functions.json"), opts); err != nil {
+			t.Errorf("%s must be callable by the agent: %v", ok, err)
+		}
+	}
+	for _, bad := range []string{"renderer", "plain"} {
+		err := Validate(context.Background(), msg(bad, "https://example.com/agent-functions.json"), opts)
+		if err == nil || !strings.Contains(err.Error(), `messages[0].callRendererFunction.callFunction.call: function "`+bad+`" is rendererOnly in its catalog`) {
+			t.Errorf("%s must be rejected as rendererOnly, got %v", bad, err)
+		}
+	}
+	err := Validate(context.Background(), []map[string]any{{"version": "v1.0", "callRendererFunction": map[string]any{"functionCallId": "c1", "callFunction": map[string]any{"call": "openUrl", "catalogId": CatalogIDBasic, "args": map[string]any{"url": "https://example.com"}}}}}, opts)
+	if err == nil || !strings.Contains(err.Error(), `function "openUrl" is rendererOnly in its catalog`) {
+		t.Errorf("every basic-catalog function is renderer-only, got %v", err)
+	}
+}
+
 func TestEmptyCatalogIDIsReportedOnce(t *testing.T) {
 	msgs := []map[string]any{
 		{"version": "v1.0", "createSurface": map[string]any{"surfaceId": "s", "catalogId": ""}},

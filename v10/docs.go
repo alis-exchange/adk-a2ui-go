@@ -12,5 +12,7 @@
 // and return typed [RendererMessage] values. [FunctionDispatcher] runs the agent's functions
 // for callAgentFunction and returns the agentFunctionResponse to send; [NewCallRendererFunction]
 // builds the request for a function the renderer should run. Function arguments always sit
-// under "args".
+// under "args". A function may be called across the wire only when its catalog definition allows
+// that caller ("allowedCallers": agentOnly or rendererOrAgent for the agent; anything but
+// agentOnly for the renderer); both Validate and the decoders enforce it.
 package v10

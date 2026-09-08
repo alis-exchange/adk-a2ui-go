@@ -11,7 +11,24 @@ import (
 	"go.alis.build/adk/a2ui/kit"
 )
 
-var strictV10 = kit.ValidateOptions{Version: kit.V10, Strict: true}
+// agentCallable declares one function the agent may ask the renderer to run; the basic
+// catalog's functions are all rendererOnly, so none of them could serve here.
+var agentCallable = map[string]any{
+	"catalogId": "https://example.com/agent-callable.json",
+	"$defs": map[string]any{
+		"anyComponent": map[string]any{"type": "object"},
+		"anyFunction":  map[string]any{"oneOf": []any{map[string]any{"$ref": "#/functions/ping"}}},
+	},
+	"functions": map[string]any{"ping": map[string]any{
+		"type": "object", "returnType": "string", "allowedCallers": "rendererOrAgent",
+		"properties": map[string]any{"call": map[string]any{"const": "ping"}, "args": map[string]any{"type": "object", "properties": map[string]any{"n": map[string]any{"type": "number"}}, "unevaluatedProperties": false}},
+		"required":   []any{"call", "args"},
+	}},
+}
+
+const agentCallableID = "https://example.com/agent-callable.json"
+
+var strictV10 = kit.ValidateOptions{Version: kit.V10, Strict: true, Params: kit.VersionParams{InlineCatalogs: []map[string]any{agentCallable}}}
 
 func mustValidate(t *testing.T, msg map[string]any) {
 	t.Helper()
@@ -162,19 +179,20 @@ func TestRegisterReplacesAndPanicsOnMisuse(t *testing.T) {
 }
 
 func TestConstructorsProduceValidMessages(t *testing.T) {
-	withArgs := NewCallRendererFunction("fc-1", FunctionCall{Call: "formatDate", CatalogID: CatalogIDBasic, Args: map[string]any{"value": "2026-09-07", "format": "yyyy"}})
+	withArgs := NewCallRendererFunction("fc-1", FunctionCall{Call: "ping", CatalogID: agentCallableID, Args: map[string]any{"n": 1.0}})
 	mustValidate(t, withArgs)
 	cf := withArgs["callRendererFunction"].(map[string]any)["callFunction"].(map[string]any)
-	if cf["catalogId"] != CatalogIDBasic || cf["args"].(map[string]any)["format"] != "yyyy" {
+	if cf["catalogId"] != agentCallableID || cf["args"].(map[string]any)["n"] != 1.0 {
 		t.Errorf("callFunction = %v", cf)
 	}
 
-	emptyArgs := NewCallRendererFunction("fc-2", FunctionCall{Call: "formatDate", CatalogID: CatalogIDBasic, Args: map[string]any{}})
+	emptyArgs := NewCallRendererFunction("fc-2", FunctionCall{Call: "ping", CatalogID: agentCallableID, Args: map[string]any{}})
 	if _, present := emptyArgs["callRendererFunction"].(map[string]any)["callFunction"].(map[string]any)["args"]; !present {
 		t.Error("an empty args map must still be sent")
 	}
+	mustValidate(t, emptyArgs)
 
-	noArgs := NewCallRendererFunction("fc-3", FunctionCall{Call: "formatDate", CatalogID: CatalogIDBasic})
+	noArgs := NewCallRendererFunction("fc-3", FunctionCall{Call: "ping", CatalogID: agentCallableID})
 	if _, present := noArgs["callRendererFunction"].(map[string]any)["callFunction"].(map[string]any)["args"]; present {
 		t.Error("nil args must not be sent")
 	}
@@ -182,9 +200,14 @@ func TestConstructorsProduceValidMessages(t *testing.T) {
 		t.Errorf("Validate must report the missing args: %v", err)
 	}
 
-	noCatalog := NewCallRendererFunction("fc-4", FunctionCall{Call: "formatDate", Args: map[string]any{"value": "x", "format": "y"}})
+	noCatalog := NewCallRendererFunction("fc-4", FunctionCall{Call: "ping", Args: map[string]any{}})
 	if err := Validate(context.Background(), []map[string]any{noCatalog}, strictV10); err == nil || !strings.Contains(err.Error(), `missing property "catalogId"`) {
 		t.Errorf("Validate must report the missing catalogId: %v", err)
+	}
+
+	rendererOnly := NewCallRendererFunction("fc-8", FunctionCall{Call: "openUrl", CatalogID: CatalogIDBasic, Args: map[string]any{"url": "https://example.com"}})
+	if err := Validate(context.Background(), []map[string]any{rendererOnly}, strictV10); err == nil || !strings.Contains(err.Error(), "is rendererOnly in its catalog") {
+		t.Errorf("a basic-catalog function is not agent-callable: %v", err)
 	}
 
 	mustValidate(t, NewAgentFunctionResponse("fc-5", map[string]any{"ok": true}))

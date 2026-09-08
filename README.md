@@ -141,7 +141,7 @@ return nil
 
 `promptModel` and `sendToRenderer` stand for your own agent and transport code.
 
-Ask the renderer to run one of its functions with `v10.NewCallRendererFunction(id, v10.FunctionCall{Call: "openUrl", CatalogID: v10.CatalogIDBasic, Args: map[string]any{"url": u}})`; the result arrives later as a `rendererFunctionResponse` with the same id.
+Ask the renderer to run one of its functions with `v10.NewCallRendererFunction(id, v10.FunctionCall{Call: "getScreenResolution", CatalogID: myCatalogID, Args: map[string]any{"screenIndex": 0}})`; the result arrives later as a `rendererFunctionResponse` with the same id. The function's catalog definition must allow agent callers (`"allowedCallers": "agentOnly"` or `"rendererOrAgent"`); every function of the basic catalog is renderer-only, so agent-initiated calls always target a custom catalog. `Validate` and `DecodeRendererMessage` enforce the rule in both directions.
 
 For v0.9 and v0.9.1, `v09.DecodeClientMessage(data, version)` returns a `v09.ClientMessage` with `Action` or `Error`; there are no function calls in those versions. Both packages also offer a list form (`DecodeRendererMessages`, `DecodeClientMessages`) whose problems carry `messages[i]` paths.
 

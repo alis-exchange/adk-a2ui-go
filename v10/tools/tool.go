@@ -35,6 +35,7 @@ func toolSpec() toolkit.Spec {
 			`createSurface has no "theme". Its "catalogId" is optional, but then every component must set its own "catalogId".`,
 			`A component may never be named "Surface". The "root" component may be placed inside createSurface.components.`,
 			`Function arguments go under "args" inside "callFunction", next to "call" and "catalogId", as the catalog's function definition describes.`,
+			`callRendererFunction may only name a function whose catalog definition sets "allowedCallers" to "agentOnly" or "rendererOrAgent"; every function of the basic catalog is renderer-only and cannot be called this way.`,
 		},
 	}
 }

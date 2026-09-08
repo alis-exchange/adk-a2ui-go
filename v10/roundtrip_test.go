@@ -2,12 +2,15 @@ package v10
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 
 	"go.alis.build/adk/a2ui/kit"
+	"go.alis.build/adk/a2ui/spec"
 )
 
 // collectCalls returns every object in v that has a string "call", nested ones included:
@@ -56,6 +59,12 @@ func TestRoundTripOfficialFunctionCalls(t *testing.T) {
 	}
 	ctx := context.Background()
 	opts := kit.ValidateOptions{Version: kit.V10, Strict: true}
+	// The basic catalog's functions are all rendererOnly, so asking the renderer to run one is
+	// spec-invalid; the third leg checks that rule fires, then re-proves the constructed message
+	// against a copy of the basic catalog whose functions the agent may call.
+	agentBasic := agentCallableBasic(t)
+	agentBasicID, _ := agentBasic["catalogId"].(string)
+	agentOpts := kit.ValidateOptions{Version: kit.V10, Strict: true, Params: kit.VersionParams{InlineCatalogs: []map[string]any{agentBasic}}}
 	d := NewFunctionDispatcher()
 	echo := func(_ context.Context, c *CallAgentFunction) (any, error) { return c.CallFunction.Args, nil }
 	total := 0
@@ -94,8 +103,14 @@ func TestRoundTripOfficialFunctionCalls(t *testing.T) {
 				if err := Validate(ctx, []map[string]any{d.Handle(ctx, got)}, opts); err != nil {
 					t.Errorf("%s %s: response: %v", base, id, err)
 				}
-				if err := Validate(ctx, []map[string]any{NewCallRendererFunction(id, got.CallFunction)}, opts); err != nil {
-					t.Errorf("%s %s: callRendererFunction: %v", base, id, err)
+				out := NewCallRendererFunction(id, got.CallFunction)
+				err = Validate(ctx, []map[string]any{out}, opts)
+				if err == nil || !strings.Contains(err.Error(), "is rendererOnly in its catalog") {
+					t.Errorf("%s %s: a basic-catalog function must be rejected as rendererOnly, got %v", base, id, err)
+				}
+				agentCall := NewCallRendererFunction(id, FunctionCall{Call: got.CallFunction.Call, CatalogID: agentBasicID, Args: got.CallFunction.Args})
+				if err := Validate(ctx, []map[string]any{agentCall}, agentOpts); err != nil {
+					t.Errorf("%s %s: callRendererFunction against an agent-callable catalog: %v", base, id, err)
 				}
 			}
 		}
@@ -104,4 +119,29 @@ func TestRoundTripOfficialFunctionCalls(t *testing.T) {
 		t.Fatalf("found only %d function calls across the examples (62 today); the walker or the examples are broken", total)
 	}
 	t.Logf("round-tripped %d function calls", total)
+}
+
+// agentCallableBasic returns a deep copy of the embedded v1.0 basic catalog under a different id,
+// with every function marked rendererOrAgent and the a2ui $id dropped so the copy is a resource
+// of its own.
+func agentCallableBasic(t *testing.T) map[string]any {
+	t.Helper()
+	src, _, _, err := spec.BasicCatalog(spec.MajorV10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, err := json.Marshal(src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var cat map[string]any
+	if err := json.Unmarshal(b, &cat); err != nil {
+		t.Fatal(err)
+	}
+	delete(cat, "$id")
+	cat["catalogId"] = "https://example.com/basic-agent-callable.json"
+	for _, def := range cat["functions"].(map[string]any) {
+		def.(map[string]any)["allowedCallers"] = "rendererOrAgent"
+	}
+	return cat
 }
