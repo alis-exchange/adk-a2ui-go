@@ -177,7 +177,7 @@ func (l *loader) Load(u string) (any, error) {
 		if l.catalog == nil {
 			return normalize(stubCatalog())
 		}
-		return normalize(l.catalog)
+		return normalize(withUnions(l.major, l.catalog))
 	}
 	b, err := fs.ReadFile(spec.FS(), l.major+"/json/"+base)
 	if err != nil {
@@ -203,6 +203,8 @@ func normalize(doc map[string]any) (any, error) {
 // stubCatalog stands in when the real catalog is unknown: it keeps the envelope rules and
 // requires id and component, but lets any component name and any properties through.
 // additionalProperties:true matters for v1.0, whose Component schema uses unevaluatedProperties.
+// It also supplies the per-union fallbacks withUnions uses for a catalog that declares nothing
+// for that union.
 func stubCatalog() map[string]any {
 	return map[string]any{
 		"$schema": "https://json-schema.org/draft/2020-12/schema",
