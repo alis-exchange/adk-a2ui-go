@@ -2,8 +2,10 @@ package kit
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -80,5 +82,15 @@ func TestAgentCapabilities(t *testing.T) {
 	want := map[string]any{"v0.9": map[string]any{"supportedCatalogIds": []string{"x"}, "acceptsInlineCatalogs": true}}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("got %v", got)
+	}
+}
+
+func TestAgentCapabilitiesNilIDsMarshalAsEmptyArray(t *testing.T) {
+	b, err := json.Marshal(AgentCapabilities(V10, nil, true))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(b), `"supportedCatalogIds":[]`) {
+		t.Errorf("both capability schemas type supportedCatalogIds as an array; got %s", b)
 	}
 }
