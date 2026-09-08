@@ -3,6 +3,7 @@ package v10
 import (
 	"context"
 	"errors"
+	"fmt"
 	"reflect"
 	"strings"
 	"testing"
@@ -189,4 +190,40 @@ func TestConstructorsProduceValidMessages(t *testing.T) {
 	mustValidate(t, NewAgentFunctionResponse("fc-5", map[string]any{"ok": true}))
 	mustValidate(t, NewAgentFunctionResponse("fc-6", nil))
 	mustValidate(t, NewAgentFunctionError("fc-7", FunctionFailed, "boom"))
+}
+
+type codedPtr struct{}
+
+func (*codedPtr) Error() string { return "coded pointer" }
+func (*codedPtr) Code() string  { return "PTR" }
+
+func TestHandleSurvivesTypedNilErrors(t *testing.T) {
+	d := NewFunctionDispatcher()
+	d.Register("bareNil", func(context.Context, *CallAgentFunction) (any, error) {
+		var fe *FunctionError
+		return nil, fe
+	})
+	d.Register("wrappedNil", func(context.Context, *CallAgentFunction) (any, error) {
+		var fe *FunctionError
+		return nil, fmt.Errorf("lookup: %w", fe)
+	})
+	d.Register("codedNil", func(context.Context, *CallAgentFunction) (any, error) {
+		var ce *codedPtr
+		return nil, ce
+	})
+	for name, wantContains := range map[string]string{
+		"bareNil":    "typed-nil",
+		"wrappedNil": "lookup:",
+		"codedNil":   "typed-nil",
+	} {
+		msg := d.Handle(context.Background(), call(name, nil))
+		code, message := errorOf(t, msg)
+		if code != FunctionFailed || !strings.Contains(message, wantContains) {
+			t.Errorf("%s: got %s: %q", name, code, message)
+		}
+		mustValidate(t, msg)
+	}
+	if got := (*FunctionError)(nil).Error(); got != "nil *FunctionError" {
+		t.Errorf("nil receiver Error() = %q", got)
+	}
 }

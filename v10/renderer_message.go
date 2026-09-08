@@ -68,6 +68,9 @@ type FunctionError struct {
 }
 
 func (e *FunctionError) Error() string {
+	if e == nil {
+		return "nil *FunctionError"
+	}
 	if e.Message == "" {
 		return render.Code(e.Code)
 	}

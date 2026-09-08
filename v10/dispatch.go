@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"reflect"
 	"sync"
 
 	"go.alis.build/adk/a2ui/kit"
@@ -19,7 +20,8 @@ const (
 // FunctionHandler runs one agent-side function. The returned value must be JSON-encodable
 // (it is re-encoded into a plain tree before it is sent). Return a *FunctionError to choose
 // the error code the renderer sees, or any error with a Code() string method; other errors are
-// reported as FunctionFailed with the error text as the message.
+// reported as FunctionFailed with the error text as the message. Never return a typed-nil
+// pointer as the error: it is not nil, and a foreign error type's own methods may panic on it.
 type FunctionHandler func(ctx context.Context, call *CallAgentFunction) (any, error)
 
 // FunctionDispatcher maps the function names a renderer may call to handlers. Register the
@@ -78,14 +80,19 @@ func (d *FunctionDispatcher) Handle(ctx context.Context, call *CallAgentFunction
 
 // errorCode picks the wire code and message for a handler error: a *FunctionError anywhere in
 // the chain wins, then any error exposing Code(), then FunctionFailed. An empty code from
-// either source falls back to FunctionFailed so the response stays meaningful.
+// either source falls back to FunctionFailed so the response stays meaningful. A typed-nil
+// pointer error (var fe *FunctionError; return nil, fe) is answered without calling any method
+// on it, since those would dereference nil inside a Handle that promises never to fail.
 func errorCode(err error) (code, message string) {
+	if isNilPointer(err) {
+		return FunctionFailed, fmt.Sprintf("handler returned a typed-nil %T", err)
+	}
 	var fe *FunctionError
 	var coded interface{ Code() string }
 	switch {
-	case errors.As(err, &fe):
+	case errors.As(err, &fe) && fe != nil:
 		code, message = fe.Code, fe.Message
-	case errors.As(err, &coded):
+	case errors.As(err, &coded) && !isNilPointer(coded):
 		code, message = coded.Code(), err.Error()
 	default:
 		code, message = FunctionFailed, err.Error()
@@ -94,6 +101,12 @@ func errorCode(err error) (code, message string) {
 		code = FunctionFailed
 	}
 	return code, message
+}
+
+// isNilPointer reports whether v is a non-nil interface holding a nil pointer.
+func isNilPointer(v any) bool {
+	rv := reflect.ValueOf(v)
+	return rv.Kind() == reflect.Pointer && rv.IsNil()
 }
 
 // toJSONTree re-encodes a handler result as the plain map/slice/scalar tree the transport and
