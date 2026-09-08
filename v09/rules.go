@@ -7,12 +7,14 @@ import (
 )
 
 // semanticRules enforces what the spec states in prose rather than schema: surface ids are
-// non-empty and created once per batch, component ids are unique per list (which is also what
-// keeps a list to at most one "root"), and every surface created in the batch ends up with a
-// root component.
+// non-empty and created once per batch, a surface is created before the batch updates or deletes
+// it, a catalogId is never empty, component ids are unique per list (which is also what keeps a
+// list to at most one "root"), and every surface created in the batch ends up with a root
+// component.
 func semanticRules(messages []map[string]any) []schema.Problem {
 	var out []schema.Problem
-	created := map[string]int{}
+	created := schema.FirstCreateIndex(messages)
+	seenCreate := map[string]bool{}
 	var createdOrder []string
 	hasRoot := map[string]bool{}
 	for i, m := range messages {
@@ -22,18 +24,22 @@ func semanticRules(messages []map[string]any) []schema.Problem {
 				out = append(out, schema.Problem{Path: fmt.Sprintf("messages[%d].createSurface.surfaceId", i), Message: "must not be empty"})
 				continue
 			}
-			if _, dup := created[sid]; dup {
+			if seenCreate[sid] {
 				out = append(out, schema.Problem{Path: fmt.Sprintf("messages[%d].createSurface", i), Message: fmt.Sprintf("surface %q is created twice in this batch", sid)})
 				continue
 			}
-			created[sid] = i
+			seenCreate[sid] = true
 			createdOrder = append(createdOrder, sid)
+			if v, present := cs["catalogId"]; present && v == "" {
+				out = append(out, schema.Problem{Path: fmt.Sprintf("messages[%d].createSurface.catalogId", i), Message: "must not be empty"})
+			}
 		}
 		if uc, ok := m["updateComponents"].(map[string]any); ok {
 			sid, _ := uc["surfaceId"].(string)
 			if sid == "" {
 				out = append(out, schema.Problem{Path: fmt.Sprintf("messages[%d].updateComponents.surfaceId", i), Message: "must not be empty"})
 			}
+			out = append(out, schema.UsedBeforeCreate(created, sid, i, "updateComponents")...)
 			comps, _ := uc["components"].([]any)
 			seen := map[string]int{}
 			roots := 0
@@ -62,9 +68,11 @@ func semanticRules(messages []map[string]any) []schema.Problem {
 		}
 		for _, key := range []string{"updateDataModel", "deleteSurface"} {
 			if obj, ok := m[key].(map[string]any); ok {
-				if sid, _ := obj["surfaceId"].(string); sid == "" {
+				sid, _ := obj["surfaceId"].(string)
+				if sid == "" {
 					out = append(out, schema.Problem{Path: fmt.Sprintf("messages[%d].%s.surfaceId", i, key), Message: "must not be empty"})
 				}
+				out = append(out, schema.UsedBeforeCreate(created, sid, i, key)...)
 			}
 		}
 	}

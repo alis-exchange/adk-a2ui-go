@@ -101,6 +101,9 @@ func checkAgentCall(ctx context.Context, eng *schema.Engine, m map[string]any, o
 			return []schema.Problem{{Path: callPath + ".args", Message: "must be of type object, got " + schema.JSONType(args)}}, nil
 		}
 	}
+	if v, present := call["catalogId"]; present && v == "" {
+		return []schema.Problem{{Path: callPath + ".catalogId", Message: "must not be empty"}}, nil
+	}
 	cid, _ := call["catalogId"].(string)
 	if cid == "" {
 		return nil, nil

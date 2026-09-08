@@ -6,17 +6,21 @@ import (
 	"go.alis.build/adk/a2ui/internal/schema"
 )
 
-// checkList enforces per-list component rules: ids are non-empty and unique, which is also what
-// keeps a list to at most one component with id "root". It reports how many roots it found (0 or
-// 1) so the caller can track whether a
-// surface (whose components may be split across createSurface.components and one or more
-// updateComponents.components lists) ends up with a root at all.
+// checkList enforces per-list component rules: ids are non-empty and unique (which also keeps a
+// list to at most one component with id "root"), and a catalogId, when present, is not empty
+// (the schema has no minLength, and an empty id would silently skip every catalog check). It
+// reports how many roots it found (0 or 1) so the caller can track whether a surface, whose
+// components may be split across createSurface.components and updateComponents lists, ends up
+// with a root at all.
 func checkList(comps []any, basePath string) (int, []schema.Problem) {
 	var out []schema.Problem
 	seen := map[string]int{}
 	roots := 0
 	for j, c := range comps {
 		obj, _ := c.(map[string]any)
+		if v, present := obj["catalogId"]; present && v == "" {
+			out = append(out, schema.Problem{Path: fmt.Sprintf("%s[%d].catalogId", basePath, j), Message: "must not be empty"})
+		}
 		id, _ := obj["id"].(string)
 		if id == "" {
 			out = append(out, schema.Problem{Path: fmt.Sprintf("%s[%d].id", basePath, j), Message: "must not be empty"})
@@ -37,13 +41,14 @@ func checkList(comps []any, basePath string) (int, []schema.Problem) {
 }
 
 // semanticRules enforces what the spec states in prose rather than schema: surface ids are
-// non-empty and created once per batch, component ids are unique per list (which is also what
-// keeps a list to at most one "root"), and every surface created in the batch ends up with a
-// root component either
-// in createSurface.components or in a later updateComponents.
+// non-empty and created once per batch, a surface is created before the batch updates or deletes
+// it, catalog ids are never empty, component ids are unique per list, and every surface created
+// in the batch ends up with a root component either in createSurface.components or in a later
+// updateComponents.
 func semanticRules(messages []map[string]any) []schema.Problem {
 	var out []schema.Problem
-	created := map[string]int{}
+	created := schema.FirstCreateIndex(messages)
+	seenCreate := map[string]bool{}
 	var createdOrder []string
 	hasRoot := map[string]bool{}
 	for i, m := range messages {
@@ -53,12 +58,15 @@ func semanticRules(messages []map[string]any) []schema.Problem {
 				out = append(out, schema.Problem{Path: fmt.Sprintf("messages[%d].createSurface.surfaceId", i), Message: "must not be empty"})
 				continue
 			}
-			if _, dup := created[sid]; dup {
+			if seenCreate[sid] {
 				out = append(out, schema.Problem{Path: fmt.Sprintf("messages[%d].createSurface", i), Message: fmt.Sprintf("surface %q is created twice in this batch", sid)})
 				continue
 			}
-			created[sid] = i
+			seenCreate[sid] = true
 			createdOrder = append(createdOrder, sid)
+			if v, present := cs["catalogId"]; present && v == "" {
+				out = append(out, schema.Problem{Path: fmt.Sprintf("messages[%d].createSurface.catalogId", i), Message: "must not be empty"})
+			}
 			if comps, ok := cs["components"].([]any); ok {
 				roots, p := checkList(comps, fmt.Sprintf("messages[%d].createSurface.components", i))
 				out = append(out, p...)
@@ -72,6 +80,7 @@ func semanticRules(messages []map[string]any) []schema.Problem {
 			if sid == "" {
 				out = append(out, schema.Problem{Path: fmt.Sprintf("messages[%d].updateComponents.surfaceId", i), Message: "must not be empty"})
 			}
+			out = append(out, schema.UsedBeforeCreate(created, sid, i, "updateComponents")...)
 			comps, _ := uc["components"].([]any)
 			roots, p := checkList(comps, fmt.Sprintf("messages[%d].updateComponents.components", i))
 			out = append(out, p...)
@@ -81,9 +90,17 @@ func semanticRules(messages []map[string]any) []schema.Problem {
 		}
 		for _, key := range []string{"updateDataModel", "deleteSurface"} {
 			if obj, ok := m[key].(map[string]any); ok {
-				if sid, _ := obj["surfaceId"].(string); sid == "" {
+				sid, _ := obj["surfaceId"].(string)
+				if sid == "" {
 					out = append(out, schema.Problem{Path: fmt.Sprintf("messages[%d].%s.surfaceId", i, key), Message: "must not be empty"})
 				}
+				out = append(out, schema.UsedBeforeCreate(created, sid, i, key)...)
+			}
+		}
+		if cf, ok := m["callRendererFunction"].(map[string]any); ok {
+			call, _ := cf["callFunction"].(map[string]any)
+			if v, present := call["catalogId"]; present && v == "" {
+				out = append(out, schema.Problem{Path: fmt.Sprintf("messages[%d].callRendererFunction.callFunction.catalogId", i), Message: "must not be empty"})
 			}
 		}
 	}

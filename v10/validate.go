@@ -156,6 +156,19 @@ func validateAgainstCatalogs(ctx context.Context, eng *schema.Engine, messages [
 		return nil
 	}
 
+	// Resolve every created surface's catalog up front, so a strict-mode miss is attributed to
+	// the createSurface that named it even when every component overrides it with its own
+	// catalogId; otherwise a surface could bind durably to a catalog the agent never verified.
+	for i, m := range messages {
+		if cs, ok := m["createSurface"].(map[string]any); ok {
+			if cid, _ := cs["catalogId"].(string); cid != "" {
+				if _, _, err := lookup(cid, fmt.Sprintf("messages[%d].createSurface.catalogId", i)); err != nil {
+					return nil, err
+				}
+			}
+		}
+	}
+
 	for i, m := range messages {
 		if cs, ok := m["createSurface"].(map[string]any); ok {
 			sid, _ := cs["surfaceId"].(string)
@@ -177,7 +190,7 @@ func validateAgainstCatalogs(ctx context.Context, eng *schema.Engine, messages [
 			path := fmt.Sprintf("messages[%d].callRendererFunction.callFunction", i)
 			cid, _ := call["catalogId"].(string)
 			if cid == "" {
-				continue // schema already requires it here
+				continue // the key is required by the schema; an empty value is reported by semanticRules
 			}
 			cat, ok, err := lookup(cid, path+".catalogId")
 			if err != nil {

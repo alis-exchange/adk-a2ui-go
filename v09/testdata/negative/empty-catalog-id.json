@@ -1,0 +1,4 @@
+{"name":"empty catalog id","version":"v0.9","strict":true,
+ "messages":[{"version":"v0.9","createSurface":{"surfaceId":"s","catalogId":""}},
+             {"version":"v0.9","updateComponents":{"surfaceId":"s","components":[{"id":"root","component":"Text","text":"hi"}]}}],
+ "wantPaths":["messages[0].createSurface.catalogId"],"wantContains":["must not be empty"]}

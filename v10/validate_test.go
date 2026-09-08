@@ -201,3 +201,15 @@ func TestFormatsAreAsserted(t *testing.T) {
 		t.Errorf("a non-ISO min must be rejected at its path, got %v", err)
 	}
 }
+
+func TestUpdatesAfterCreateAndForeignSurfacesAreFine(t *testing.T) {
+	msgs := []map[string]any{
+		{"version": "v1.0", "updateDataModel": map[string]any{"surfaceId": "earlier-turn", "path": "/x", "value": 1.0}},
+		{"version": "v1.0", "createSurface": map[string]any{"surfaceId": "s", "catalogId": CatalogIDBasic}},
+		{"version": "v1.0", "updateComponents": map[string]any{"surfaceId": "s", "components": []any{map[string]any{"id": "root", "component": "Text", "text": "hi"}}}},
+		{"version": "v1.0", "deleteSurface": map[string]any{"surfaceId": "s"}},
+	}
+	if err := Validate(context.Background(), msgs, kit.ValidateOptions{Version: kit.V10, Strict: true}); err != nil {
+		t.Errorf("a surface from an earlier turn and in-order messages must pass: %v", err)
+	}
+}

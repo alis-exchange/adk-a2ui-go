@@ -1,0 +1,6 @@
+{"name":"empty catalog ids","version":"v1.0","strict":true,
+ "messages":[{"version":"v1.0","createSurface":{"surfaceId":"s","catalogId":""}},
+             {"version":"v1.0","updateComponents":{"surfaceId":"s","components":[{"id":"root","component":"Text","text":"hi","catalogId":""}]}},
+             {"version":"v1.0","callRendererFunction":{"functionCallId":"c1","callFunction":{"call":"ping","catalogId":"","args":{}}}}],
+ "wantPaths":["messages[0].createSurface.catalogId","messages[1].updateComponents.components[0].catalogId","messages[2].callRendererFunction.callFunction.catalogId"],
+ "wantContains":["must not be empty"]}
