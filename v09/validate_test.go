@@ -97,6 +97,17 @@ func TestOfficialExamplesPassValidate(t *testing.T) {
 	}
 }
 
+func TestDeleteThenRecreateIsAllowed(t *testing.T) {
+	msgs := []map[string]any{
+		{"version": "v0.9", "deleteSurface": map[string]any{"surfaceId": "s"}},
+		{"version": "v0.9", "createSurface": map[string]any{"surfaceId": "s", "catalogId": CatalogIDBasic}},
+		{"version": "v0.9", "updateComponents": map[string]any{"surfaceId": "s", "components": []any{map[string]any{"id": "root", "component": "Text", "text": "hi"}}}},
+	}
+	if err := Validate(context.Background(), msgs, kit.ValidateOptions{Version: kit.V09, Strict: true}); err != nil {
+		t.Errorf("deleting and recreating a surface in one batch is the spec's reconfigure flow: %v", err)
+	}
+}
+
 func TestGracefulUnknownCatalog(t *testing.T) {
 	msgs := []map[string]any{
 		{"version": "v0.9", "createSurface": map[string]any{"surfaceId": "s", "catalogId": "https://example.com/custom.json"}},

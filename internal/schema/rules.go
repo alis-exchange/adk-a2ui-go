@@ -19,8 +19,9 @@ func FirstCreateIndex(messages []map[string]any) map[string]int {
 }
 
 // UsedBeforeCreate reports a message at index i, under key, that addresses a surface this batch
-// only creates later. Both specs say createSurface MUST have been sent first; every official
-// example creates before it updates.
+// only creates later. Both specs say a surface must be created before any updateComponents or
+// updateDataModel addresses it; deleteSurface is deliberately not covered, since deleting and
+// recreating a surface in one batch is the spec's own way to reconfigure it.
 func UsedBeforeCreate(created map[string]int, sid string, i int, key string) []Problem {
 	if ci, ok := created[sid]; ok && ci > i {
 		return []Problem{{Path: fmt.Sprintf("messages[%d].%s", i, key), Message: fmt.Sprintf("surface %q is used before its createSurface at messages[%d]", sid, ci)}}

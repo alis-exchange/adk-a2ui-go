@@ -1,5 +1,5 @@
 {"name":"surface used before it is created","version":"v0.9","strict":true,
- "messages":[{"version":"v0.9","deleteSurface":{"surfaceId":"s"}},
+ "messages":[{"version":"v0.9","updateDataModel":{"surfaceId":"s","path":"/x","value":1}},
              {"version":"v0.9","createSurface":{"surfaceId":"s","catalogId":"https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json"}},
              {"version":"v0.9","updateComponents":{"surfaceId":"s","components":[{"id":"root","component":"Text","text":"hi"}]}}],
- "wantPaths":["messages[0].deleteSurface"],"wantContains":["surface \"s\" is used before its createSurface at messages[1]"]}
+ "wantPaths":["messages[0].updateDataModel"],"wantContains":["surface \"s\" is used before its createSurface at messages[1]"]}

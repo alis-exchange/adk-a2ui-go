@@ -137,11 +137,13 @@ func pruneCollateralFalseSchema(causes []*jsonschema.ValidationError) []*jsonsch
 // (#/functions/<name>, matched by the instance's "call"). A call can sit one or two unions
 // above the catalog's function union: DynamicValue and CheckRule name a branch FunctionCall,
 // itself oneOf[catalog anyFunction, IndexSystemFunction], and the catalog's anyFunction is the
-// union of its functions. A call therefore descends through a "FunctionCall" or "anyFunction"
-// branch and lets the inner union pick by name; "@index" is the one function defined outside
-// the catalog and selects the IndexSystemFunction branch instead. The unknown-function message
-// is reported only from a union whose branches are all catalog function refs
-// (#/functions/<name>) -- any other union's branch names would mislead.
+// union of its functions. A call therefore descends through a "FunctionCall" branch regardless
+// of name, and through an "anyFunction" branch only when it is not "@index" -- "@index" is the
+// one function defined outside the catalog, so a lone anyFunction branch can never be its home,
+// while a "FunctionCall" branch's own inner union is exactly where the first loop above picks it
+// up as IndexSystemFunction. The unknown-function message is reported only from a union whose
+// branches are all catalog function refs (#/functions/<name>) -- any other union's branch names
+// would mislead.
 func (f *formatter) walkOneOf(e *jsonschema.ValidationError) bool {
 	v, _ := f.valueAt(e.InstanceLocation)
 	inst, ok := v.(map[string]any)
@@ -182,12 +184,17 @@ func (f *formatter) walkOneOf(e *jsonschema.ValidationError) bool {
 			}
 		}
 	}
-	if call != "" && call != "@index" {
+	if call != "" {
 		// A call can sit one or two unions above the catalog's function union: DynamicValue and
-		// CheckRule branches name FunctionCall, whose own union names the catalog's anyFunction.
-		// Descend through either and let the inner union prune by name.
+		// CheckRule branches name FunctionCall, whose own union names the catalog's anyFunction
+		// alongside IndexSystemFunction. Descending into "FunctionCall" is always right, @index
+		// included, since that inner union is where the first loop above picks up @index.
+		// Descending into "anyFunction" is not: it names only the catalog's own functions, so a
+		// lone anyFunction branch (no IndexSystemFunction sibling in this union) must never be
+		// entered for @index, or the fallback below would misreport it as an unknown catalog
+		// function.
 		for i, c := range e.Causes {
-			if names[i] == "anyFunction" || names[i] == "FunctionCall" {
+			if names[i] == "FunctionCall" || (names[i] == "anyFunction" && call != "@index") {
 				f.walk(c)
 				return true
 			}

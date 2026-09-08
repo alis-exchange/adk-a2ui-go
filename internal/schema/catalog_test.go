@@ -127,6 +127,26 @@ func TestV09CatalogWithoutDefsCompiles(t *testing.T) {
 	}
 }
 
+// A derived v0.9 function branch must require "args" when the catalog's own parameters schema
+// has mandatory parameters -- a function like trim cannot be called without them -- but stay
+// permissive for a function like now, whose parameters take no required fields.
+func TestV09DerivedFunctionRequiresArgsOnlyWhenParametersDo(t *testing.T) {
+	cat := v09Catalog()
+	cat["functions"] = append(cat["functions"].([]any), map[string]any{
+		"name": "now", "returnType": "string", "parameters": map[string]any{"type": "object"},
+	})
+	fn, err := For(spec.MajorV09).CompileRef("common_types.json#/$defs/FunctionCall", cat, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := fn.Validate(map[string]any{"call": "trim"}); err == nil {
+		t.Error("trim without args accepted, but trim's parameters require value")
+	}
+	if err := fn.Validate(map[string]any{"call": "now"}); err != nil {
+		t.Errorf("now without args rejected, but now's parameters require nothing: %s", firstLine(err))
+	}
+}
+
 func TestCatalogDeclaringNothingIsPermissive(t *testing.T) {
 	cat := map[string]any{"catalogId": "https://example.com/empty.json"}
 	comp, err := For(spec.MajorV10).CompileRef("agent_to_renderer.json#/$defs/Component", cat, false)
@@ -160,5 +180,90 @@ func TestDeclaredDefsWin(t *testing.T) {
 	}
 	if err := comp.Validate(map[string]any{"id": "x", "component": "Badge", "label": "hi"}); err == nil {
 		t.Error("a declared anyComponent must be used as is, not replaced by the synthesised union")
+	}
+}
+
+// The components and functions unions fall back to the permissive stub independently: a catalog
+// that declares one but not the other must stay strict on the declared side and permissive on
+// the other, in every combination.
+func TestUnionsFallBackIndependently(t *testing.T) {
+	cases := []struct {
+		name                        string
+		hasComponents, hasFunctions bool
+	}{
+		{"components only", true, false},
+		{"functions only", false, true},
+		{"both", true, true},
+		{"neither", false, false},
+	}
+	assertUnion := func(t *testing.T, declared bool, declaredErr, undeclaredErr error) {
+		t.Helper()
+		if declared && declaredErr == nil {
+			t.Error("a declared union must reject an unknown name")
+		}
+		if !declared && undeclaredErr != nil {
+			t.Errorf("an undeclared union must accept an arbitrary value: %v", undeclaredErr)
+		}
+	}
+	for _, tc := range cases {
+		t.Run("v1.0/"+tc.name, func(t *testing.T) {
+			cat := map[string]any{"catalogId": "https://example.com/x.json"}
+			if tc.hasComponents {
+				cat["components"] = map[string]any{"Badge": map[string]any{
+					"type": "object", "properties": map[string]any{"component": map[string]any{"const": "Badge"}}, "required": []any{"component"},
+				}}
+			}
+			if tc.hasFunctions {
+				cat["functions"] = map[string]any{"ping": map[string]any{
+					"type": "object", "properties": map[string]any{"call": map[string]any{"const": "ping"}}, "required": []any{"call"},
+				}}
+			}
+			comp, err := For(spec.MajorV10).CompileRef("agent_to_renderer.json#/$defs/Component", cat, false)
+			if err != nil {
+				t.Fatal(err)
+			}
+			compErr := comp.Validate(map[string]any{"id": "x", "component": "Anything"})
+			assertUnion(t, tc.hasComponents, compErr, compErr)
+
+			fn, err := For(spec.MajorV10).CompileRef("common_types.json#/$defs/FunctionCall", cat, false)
+			if err != nil {
+				t.Fatal(err)
+			}
+			fnErr := fn.Validate(map[string]any{"call": "anything"})
+			assertUnion(t, tc.hasFunctions, fnErr, fnErr)
+		})
+		t.Run("v0.9/"+tc.name, func(t *testing.T) {
+			cat := map[string]any{"catalogId": "https://example.com/y.json"}
+			if tc.hasComponents {
+				cat["components"] = map[string]any{"Badge": map[string]any{
+					"type":       "object",
+					"properties": map[string]any{"id": map[string]any{"type": "string"}, "component": map[string]any{"const": "Badge"}},
+					"required":   []any{"id", "component"},
+				}}
+			}
+			if tc.hasFunctions {
+				cat["functions"] = []any{map[string]any{"name": "ping", "parameters": map[string]any{"type": "object"}}}
+			}
+			s, err := For(spec.MajorV09).Compile(CompileOptions{Entry: EntryOutboundV09, Catalog: cat})
+			if err != nil {
+				t.Fatal(err)
+			}
+			// theme absent: a createSurface without one must still compile and validate.
+			batch := []any{
+				map[string]any{"version": "v0.9", "createSurface": map[string]any{"surfaceId": "s", "catalogId": cat["catalogId"]}},
+				map[string]any{"version": "v0.9", "updateComponents": map[string]any{"surfaceId": "s", "components": []any{
+					map[string]any{"id": "root", "component": "Anything"},
+				}}},
+			}
+			compErr := s.Validate(batch)
+			assertUnion(t, tc.hasComponents, compErr, compErr)
+
+			fn, err := For(spec.MajorV09).CompileRef("common_types.json#/$defs/FunctionCall", cat, false)
+			if err != nil {
+				t.Fatal(err)
+			}
+			fnErr := fn.Validate(map[string]any{"call": "anything"})
+			assertUnion(t, tc.hasFunctions, fnErr, fnErr)
+		})
 	}
 }

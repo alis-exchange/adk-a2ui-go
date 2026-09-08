@@ -75,10 +75,14 @@ func functionUnion(v any, fallback any) any {
 				continue
 			}
 			props := map[string]any{"call": map[string]any{"const": name}}
+			required := []any{"call"}
 			if params, ok := def["parameters"]; ok {
 				props["args"] = params
+				if functionRequiresArgs(params) {
+					required = append(required, "args")
+				}
 			}
-			branches = append(branches, map[string]any{"type": "object", "properties": props, "required": []any{"call"}})
+			branches = append(branches, map[string]any{"type": "object", "properties": props, "required": required})
 		}
 		if len(branches) == 0 {
 			return fallback
@@ -86,6 +90,21 @@ func functionUnion(v any, fallback any) any {
 		return map[string]any{"oneOf": branches}
 	}
 	return fallback
+}
+
+// functionRequiresArgs reports whether a v0.9 function's parameters schema has mandatory
+// parameters, so the derived branch can require "args" for it: a function like trim cannot be
+// called without them. A parameters schema with no required parameters (or none at all) stays
+// permissive, as trim's neighbours are free to declare optional-only parameters.
+func functionRequiresArgs(params any) bool {
+	obj, _ := params.(map[string]any)
+	if req, ok := obj["required"].([]any); ok && len(req) > 0 {
+		return true
+	}
+	if _, ok := obj["minProperties"]; ok {
+		return true
+	}
+	return false
 }
 
 // themeSchema turns v0.9's inline theme (a map from theme property to its schema) into the

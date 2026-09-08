@@ -130,7 +130,9 @@ func toJSONTree(v any) (any, error) {
 // call. The outbound schema requires call.CatalogID; it is left out when empty so Validate
 // reports the omission at the call path rather than this constructor guessing a catalog.
 // call.Args is sent whenever it is non-nil, an empty map included, because catalogs require the
-// key.
+// key. The function's catalog definition must allow agent callers (allowedCallers agentOnly or
+// rendererOrAgent); Validate rejects a call to a rendererOnly function, which is every function
+// of the basic catalog.
 func NewCallRendererFunction(functionCallID string, call FunctionCall) map[string]any {
 	cf := map[string]any{"call": call.Call}
 	if call.CatalogID != "" {

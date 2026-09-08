@@ -94,7 +94,12 @@ func semanticRules(messages []map[string]any) []schema.Problem {
 				if sid == "" {
 					out = append(out, schema.Problem{Path: fmt.Sprintf("messages[%d].%s.surfaceId", i, key), Message: "must not be empty"})
 				}
-				out = append(out, schema.UsedBeforeCreate(created, sid, i, key)...)
+				// deleteSurface is exempt: deleting and recreating a surface in one batch is the
+				// spec's own way to reconfigure it, so a leading deleteSurface must not be flagged
+				// as using the surface before its later createSurface.
+				if key == "updateDataModel" {
+					out = append(out, schema.UsedBeforeCreate(created, sid, i, key)...)
+				}
 			}
 		}
 		if cf, ok := m["callRendererFunction"].(map[string]any); ok {

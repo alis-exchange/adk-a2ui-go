@@ -193,3 +193,22 @@ func TestFormatPrunesCallsInsideCheckRule(t *testing.T) {
 		})
 	}
 }
+
+// A nested @index (CheckRule.condition sits one union above the catalog's function union) must
+// still descend into IndexSystemFunction and report the real type error on its arg, not fan out
+// into the catalog's own functions and report a spurious missing-required-property problem.
+func TestFormatPrunesNestedIndexCall(t *testing.T) {
+	s := checkRuleSchema(t)
+	rule := map[string]any{"condition": map[string]any{"call": "@index", "args": map[string]any{"offset": "x"}}}
+	err := s.Validate(rule)
+	if err == nil {
+		t.Fatal("expected a validation error")
+	}
+	text := ""
+	for _, p := range Format(err, rule, "rule") {
+		text += p.String() + "\n"
+	}
+	if !strings.Contains(text, "rule.condition.args.offset: must be of type number") || strings.Contains(text, `must be "required"`) {
+		t.Errorf("nested @index must select the IndexSystemFunction branch, got:\n%s", text)
+	}
+}

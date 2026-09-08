@@ -105,6 +105,17 @@ func TestRootInsideCreateSurface(t *testing.T) {
 	}
 }
 
+func TestDeleteThenRecreateIsAllowed(t *testing.T) {
+	msgs := []map[string]any{
+		{"version": "v1.0", "deleteSurface": map[string]any{"surfaceId": "s"}},
+		{"version": "v1.0", "createSurface": map[string]any{"surfaceId": "s", "catalogId": CatalogIDBasic}},
+		{"version": "v1.0", "updateComponents": map[string]any{"surfaceId": "s", "components": []any{map[string]any{"id": "root", "component": "Text", "text": "hi"}}}},
+	}
+	if err := Validate(context.Background(), msgs, kit.ValidateOptions{Version: kit.V10, Strict: true}); err != nil {
+		t.Errorf("deleting and recreating a surface in one batch is the spec's reconfigure flow: %v", err)
+	}
+}
+
 func TestPerComponentCatalogID(t *testing.T) {
 	msgs := []map[string]any{
 		{"version": "v1.0", "createSurface": map[string]any{"surfaceId": "s"}},
